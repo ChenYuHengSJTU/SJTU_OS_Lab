@@ -1,0 +1,4 @@
+ls
+ls | wc
+ls | uniq | sort
+cat client.txt

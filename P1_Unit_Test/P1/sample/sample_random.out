@@ -1,0 +1,17 @@
+2
+0 0 1
+1 0 1
+1 1 0
+0 1 1
+0 1 2
+1 0 1
+1 1 0
+0 0 1
+0 0 1
+1 1 3
+0 1 1
+1 0 1
+
+// The first line is an integer n, which is the size of matrix.
+// The following 3*n*n lines, the first n*n lines represent matrix A, the second n*n lines represent matrix B, and the last n*n lines represent matrix AB. Use "a b c" at a line to show that M[a][b]=c
+// For this example, A={{1,1},{1,0}},B={{1,2},{1,0}},AB={{1,1,},{1,3}}. Obviously, the answer of AB in this example is WRONG!
