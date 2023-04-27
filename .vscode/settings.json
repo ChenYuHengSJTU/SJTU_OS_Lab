@@ -1,6 +1,10 @@
 {
+<<<<<<< HEAD
+    "C_Cpp.errorSquiggles": "disabled"
+=======
     "C_Cpp.errorSquiggles": "disabled",
     "files.associations": {
         "pthread.h": "c"
     }
+>>>>>>> 2612992a5fe59cd80a8edfa71e7fef411f8366a8
 }

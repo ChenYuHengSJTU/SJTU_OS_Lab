@@ -188,7 +188,7 @@ int main(int argc, char** argv){
     servaddr.sin_family = AF_INET;  
     servaddr.sin_addr.s_addr = htonl(INADDR_ANY);
     servaddr.sin_port = htons(atoi(argv[1]));
-  
+    
     if( bind(socket_fd, (struct sockaddr*)&servaddr, sizeof(servaddr)) == -1){  
         printf("bind socket error: %s(errno: %d)\n",strerror(errno),errno);  
         exit(0);  

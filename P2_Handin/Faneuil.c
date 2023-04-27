@@ -7,7 +7,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 
-sem_t enter, to_confirm, leave, get_certificated, confirmed;
+sem_t enter, to_confirm, leave, get_certificated, confirmed, sit_down;
 pthread_mutex_t immigrant_lock, judge_lock, spectator_lock, lock;
 
 #define NT_Imm 5
@@ -25,6 +25,7 @@ int confirmed_immigrants[NT_Imm];
 // int immigrant = 0, judge = 0, spectator = 0, enter_in = 0, to_confirm = 0, confirmed = 0, checkin = 0, sitdown = 0, certificated = 0, left = 0, s_left = 0;
 long entered = 0, tot = 0;
 bool judge_in = false;
+long imm_in_hall = 0;
 
 static long ID = 0;
 static long _ID = 0;
@@ -67,6 +68,7 @@ void* Immigrants(void* arg){
     while(1){
         sem_wait(&enter);
         printf("Immigrant #%ld enter\n", id);
+        atomic_inc(&imm_in_hall);
         sem_post(&enter);
 
         // pthread_mutex_lock(&lock);
@@ -87,6 +89,7 @@ void* Immigrants(void* arg){
         usleep(random_uint64() % 200);
 
         printf("Immigrant #%ld sitdown\n", id); 
+        sem_post(&sit_down);
         printf("Immigrant #%ld swear\n", id);
 
         // pthread_mutex_lock(&lock);
@@ -107,6 +110,7 @@ void* Immigrants(void* arg){
 
         sem_wait(&leave);
         printf("Immigrant #%ld leave\n", id);
+        atomic_dec(&imm_in_hall);
         sem_post(&leave);
 
         id += NT_Imm;
@@ -126,6 +130,9 @@ void* Judges(void* arg){
         // pthread_mutex_lock(&lock);
         sem_wait(&to_confirm);
         // pthread_mutex_unlock(&lock);
+        for(int i = 0;i < imm_in_hall;++i){
+            sem_wait(&sit_down);
+        }
 
         if(tot == 0)
             printf("judge #%ld has no immigrant to confirm\n", id);

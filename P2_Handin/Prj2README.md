@@ -13,8 +13,10 @@
 ### Demo file:
 
 + show.ipynb
-
++ show.html
++ show.pdf
 ### Other file:
 
 + Lab2-Report
 + Prj2README.md
++ Makefile

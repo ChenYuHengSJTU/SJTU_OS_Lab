@@ -96,30 +96,42 @@ void Compare(){
     for(int i = 0;i < n;++i){
         for(int j = 0;j < n; ++j){
 <<<<<<< HEAD
+            fprintf(out, "%d %d %d\n", matrix_A[i][j]);
+=======
+<<<<<<< HEAD
             fprintf(out, "%d %d %d\n", i ,j ,matrix_A[i][j]);
 =======
             fprintf(out, "%d %d %d\n", matrix_A[i][j]);
 >>>>>>> b3af85596e845a2b23b5011a06bbd6b6bdb739b0
+>>>>>>> 2612992a5fe59cd80a8edfa71e7fef411f8366a8
         }
     }
 
     for(int i = 0;i < n;++i){
         for(int j = 0;j < n; ++j){
+<<<<<<< HEAD
+            fprintf(out, "%d %d %d\n", matrix_B[i][j]);
+=======
 <<<<<<< HEAD
             fprintf(out, "%d %d %d\n", i ,j ,matrix_B[i][j]);
 =======
             fprintf(out, "%d %d %d\n", matrix_B[i][j]);
 >>>>>>> b3af85596e845a2b23b5011a06bbd6b6bdb739b0
+>>>>>>> 2612992a5fe59cd80a8edfa71e7fef411f8366a8
         }
     }
 
     for(int i = 0;i < n;++i){
         for(int j = 0;j < n; ++j){
 <<<<<<< HEAD
+            fprintf(out, "%d %d %d\n", res[i][j]);
+=======
+<<<<<<< HEAD
             fprintf(out, "%d %d %d\n", i, j, res[i][j]);
 =======
             fprintf(out, "%d %d %d\n", res[i][j]);
 >>>>>>> b3af85596e845a2b23b5011a06bbd6b6bdb739b0
+>>>>>>> 2612992a5fe59cd80a8edfa71e7fef411f8366a8
         }
     }
     fclose(out);
@@ -228,38 +240,52 @@ int main(int argc, char* argv[]){
 
 
 <<<<<<< HEAD
+=======
+<<<<<<< HEAD
     FILE* out = fopen("random.out", "w");
     fprintf(out, "%d\n", n);
     for(int i = 0;i < n;++i){
         for(int j = 0;j < n; ++j){
             fprintf(out, "%d %d %d\n", i, j, matrix_A[i][j]);
 =======
+>>>>>>> 2612992a5fe59cd80a8edfa71e7fef411f8366a8
     FILE* out = fopen("data.out", "w");
     fprintf(out, "%d\n", n);
     for(int i = 0;i < n;++i){
         for(int j = 0;j < n; ++j){
             fprintf(out, "%d %d %d\n", matrix_A[i][j]);
+<<<<<<< HEAD
+=======
 >>>>>>> b3af85596e845a2b23b5011a06bbd6b6bdb739b0
+>>>>>>> 2612992a5fe59cd80a8edfa71e7fef411f8366a8
         }
     }
 
     for(int i = 0;i < n;++i){
         for(int j = 0;j < n; ++j){
+<<<<<<< HEAD
+            fprintf(out, "%d %d %d\n", matrix_B[i][j]);
+=======
 <<<<<<< HEAD
             fprintf(out, "%d %d %d\n", i, j, matrix_B[i][j]);
 =======
             fprintf(out, "%d %d %d\n", matrix_B[i][j]);
 >>>>>>> b3af85596e845a2b23b5011a06bbd6b6bdb739b0
+>>>>>>> 2612992a5fe59cd80a8edfa71e7fef411f8366a8
         }
     }
 
     for(int i = 0;i < n;++i){
         for(int j = 0;j < n; ++j){
 <<<<<<< HEAD
+            fprintf(out, "%d %d %d\n", res[i][j]);
+=======
+<<<<<<< HEAD
             fprintf(out, "%d %d %d\n", i, j, res[i][j]);
 =======
             fprintf(out, "%d %d %d\n", res[i][j]);
 >>>>>>> b3af85596e845a2b23b5011a06bbd6b6bdb739b0
+>>>>>>> 2612992a5fe59cd80a8edfa71e7fef411f8366a8
         }
     }
 
