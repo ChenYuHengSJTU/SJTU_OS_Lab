@@ -138,7 +138,9 @@ uint64_t* GetPhysicalBlockNum(struct Inode* inode, int block_num){
 // write to the block (if can combined with read?)
 // block num is the physical block num
 // TODO consider the parameter, offset should be a must
-int WriteBlock(uint64_t block_num, char* data, size_t n, size_t offset){
+// flag means the inode block or the data block
+// 0 - inode block, 1 - data block
+int WriteBlock(uint64_t block_num, char* data, size_t n, size_t offset, int flag){
     // get the physical block num 
     // int physical_block_num = GetPhysicalBlockNum(block_num);
     // write to the disk 
@@ -146,7 +148,22 @@ int WriteBlock(uint64_t block_num, char* data, size_t n, size_t offset){
         fprintf(stderr, "FAIL: offset is too large\n");
         return -1;
     }
-    memcpy(disk + block_num * BLOCK_SIZE + offset, data, n);
+    if(!flag)
+        memcpy(disk + (INODE_BLOCK + block_num) * BLOCK_SIZE + offset, data, n);
+    else 
+        memcpy(disk + (DATA_BLOCK + block_num) * BLOCK_SIZE + offset, data, n);
+}
+
+// read from the block
+int ReadBlock(uint64_t block_num, char* data, size_t n, size_t offset, int flag){
+    if(offset >= BLOCK_SIZE){
+        fprintf(stderr, "FAIL: offset is too large\n");
+        return -1;
+    }
+    if(!flag)
+        memcpy(data, disk + (INODE_BLOCK + block_num) * BLOCK_SIZE + offset, n);
+    else 
+        memcpy(data, disk + (DATA_BLOCK + block_num) * BLOCK_SIZE + offset, n);
 }
 
 // Initialize the Disk 
@@ -180,8 +197,9 @@ uint64_t I_GetFreeBlock(){
     }
     struct Block* tmp = i_free_block_list;
     i_free_block_list = i_free_block_list->nxt;
-    int ret = tmp->block_num;
+    uint64_t ret = tmp->block_num;
     free(tmp);
+    printf("allocate a block: %ld\n", ret);
     return ret;
 }
 
@@ -201,7 +219,7 @@ uint64_t D_GetFreeBlock(){
     }
     struct Block* tmp = d_free_block_list;
     d_free_block_list = d_free_block_list->nxt;
-    int ret = tmp->block_num;
+    uint64_t ret = tmp->block_num;
     free(tmp);
     return ret;
 }
@@ -250,7 +268,7 @@ int Format(char **args){
     // -1 means no file
     // TODO may 0 is a no-worse choice
     root.direct[1] = Current_Dir;
-    WriteBlock(Current_Dir, (char*)&root, sizeof(root), 0);
+    WriteBlock(Current_Dir, (char*)&root, sizeof(root), 0, 0);
     printf("end formatting\n");
     CurrentDir_Inode = (struct Inode*)(disk +(INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
 }
@@ -269,12 +287,12 @@ void AddEntry(struct Inode* dir, uint64_t inode_num){
     for(int j = 0;j < 4;++j){
         if(dir->second_indirect[j] == -1){
             dir->second_indirect[j] = D_GetFreeBlock();
-            uint64_t* indirect_block = (uint64_t*)(disk + dir->second_indirect[j] * BLOCK_SIZE);
+            uint64_t* indirect_block = (uint64_t*)(disk + (INODE_BLOCK + dir->second_indirect[j]) * BLOCK_SIZE);
             indirect_block[0] = inode_num;
             dir->block_num++;
             return;
         }
-        uint64_t* indirect_block = (uint64_t*)(disk + dir->second_indirect[j] * BLOCK_SIZE);
+        uint64_t* indirect_block = (uint64_t*)(disk + (INODE_BLOCK + dir->second_indirect[j]) * BLOCK_SIZE);
         for(int i = 0;i < ENTRY_NUM;++i){
             if(indirect_block[i] == -1){
                 indirect_block[i] = inode_num;
@@ -308,7 +326,7 @@ int MakeFile(char **args){
         return -1;
     }
     // write the inode 
-    WriteBlock(Inode_num, (char*)&new_file, sizeof(new_file), 0);
+    WriteBlock(Inode_num, (char*)&new_file, sizeof(new_file), 0, 0);
     // add the new file to the current dir
     // find the last block
     // int last_block = Current_Dir.block_num;
@@ -343,9 +361,11 @@ int MakeDir(char **args){
     }
     // add the new dir to the current dir
     AddEntry((struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE), Inode_num);
-    AddEntry(&new_dir, Inode_num);
+    // AddEntry(&new_dir, Inode_num);
+    new_dir.direct[0] = Inode_num;
+    new_dir.direct[1] = Current_Dir;
     // write the inode
-    WriteBlock(Inode_num, (char*)&new_dir, sizeof(new_dir), 0);
+    WriteBlock(Inode_num, (char*)(&new_dir), sizeof(new_dir), 0, 0);
 }
 
 // maybe block num of Inode is more useful
@@ -357,7 +377,7 @@ uint64_t* FindEntry(uint64_t inode_num ,char* entry_name){
         return NULL;
     }
     // memcpy(&dir, disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE, sizeof(dir));
-    for(int i = 0;i < DIRECT_BLOCK;++i){
+    for(int i = 2;i < DIRECT_BLOCK;++i){
         if(dir->direct[i] == -1)
             continue;
         memcpy(&tmp, disk + (INODE_BLOCK + dir->direct[i]) * BLOCK_SIZE, sizeof(tmp));
@@ -394,6 +414,7 @@ int RemoveFile(char **args){
     }
     // delete the file from the current dir
     // TODO maybe it is not a good practice, but maybe faster
+    I_ReturnBlock(*Inode_num);
     *Inode_num = -1;
 }
 
@@ -406,6 +427,7 @@ int RemoveDir(char **args){
     }
     // delete the dir from the current dir
     // TODO maybe it is not a good practice
+    I_ReturnBlock(*Inode_num);
     *Inode_num = -1;
 }
 
@@ -429,37 +451,53 @@ void ParsePath(char* path, char* dirs[]){
 int ChangeDir(char **args){
     char* dirs[MAX_DIR_DEPTH];
     ParsePath(args[1], dirs);
-    uint64_t tmp_cur_dir = 0;
+    uint64_t tmp_cur_dir = Current_Dir;
     int cnt = 0;
-    struct Inode* cur_dir = (struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
+    struct Inode cur_dir = *(struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
+    // printf("Current_Dir: %ld, dir-direct[0]: %ld\n", Current_Dir, cur_dir.direct[0]);
+    assert(Current_Dir == cur_dir.direct[0]);
     if(strcmp(dirs[0], "/") == 0){
         tmp_cur_dir = 0;
         cnt++;
     }
     else if(strcmp(dirs[0], "..") == 0){
-        tmp_cur_dir = cur_dir->direct[1];
+        // printf("back to the fa\n");
+        tmp_cur_dir = cur_dir.direct[1];
+        // printf("tmp_cur_dir: %ld\n", tmp_cur_dir);
         cnt++;
     }
     else if(strcmp(dirs[0], ".") == 0){
         tmp_cur_dir = Current_Dir;
         cnt++;
     }
-    cur_dir = (struct Inode*)(disk + (INODE_BLOCK + tmp_cur_dir) * BLOCK_SIZE);
+    else{
+        // printf("working in %ld\n", Current_Dir);
+        tmp_cur_dir = Current_Dir;
+    }
+    cur_dir = *(struct Inode*)(disk + (INODE_BLOCK + tmp_cur_dir) * BLOCK_SIZE);
     while(dirs[cnt] != NULL){
+        // printf("dirs[%d]: %s\n", cnt, dirs[cnt]);
         uint64_t* Inode_num = FindEntry(tmp_cur_dir, dirs[cnt]);
         if(Inode_num == NULL){
             printf("FAIL: No such dir!\n");
             return -1;
         }
+        struct Inode* inode = (struct Inode*)(disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE);
+        if(inode->file_type == 0){
+            printf("FAIL: %s is not a dir!\n", inode->filename);
+            return -1;
+        }
+        // printf("inode . %ld .. %ld\n", inode->direct[0], inode->direct[1]);
         tmp_cur_dir = *Inode_num;
-        memcpy(cur_dir, disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE, sizeof(*cur_dir));
+        memcpy(&cur_dir, disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE, sizeof(struct Inode));
         cnt++;
     }
     Current_Dir = tmp_cur_dir;
     CurrentDir_Inode = (struct Inode*)(disk +(INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
     memcpy(pwd, args[1], strlen(args[1]));
+    cur_dir = *(struct Inode*)(disk + (INODE_BLOCK + tmp_cur_dir) * BLOCK_SIZE);
+    // printf("after Current_Dir: %ld, dir-direct[0]: %ld\n", Current_Dir, cur_dir.direct[0]);
 }
-
 
 void PrintEntry(struct Inode* inode){
     assert(inode != NULL);
@@ -473,12 +511,25 @@ void PrintEntry(struct Inode* inode){
     printf("\n");
 }
 
+int PrintCurDir(char **args){
+    printf("Current dir: %ld\n", Current_Dir);
+    struct Inode* inode = (struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
+    printf("%s\n", inode->filename);
+    printf("inode . %ld .. %ld\n", inode->direct[0], inode->direct[1]);
+    PrintEntry(inode);
+}
+
 // ls
 // for dir inode , we cannot use the block_num, we must use -1 to manage the invalid inode entry
 int List(char **args){
-    printf("List called\n");
+    // printf("List called\n");
     struct Inode dir, tmp; 
     memcpy(&dir, disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE, sizeof(dir));
+    if(dir.file_type == 0){
+        printf("FAIL: Not a dir!\n");
+        return -1;
+    }
+    // printf(".:%ld\t..:%ld\n", dir.direct[0], dir.direct[1]);
     // printf("%s\n", dir.filename);
     for(int i = 0;i < DIRECT;++i){
         if(dir.direct[i] == -1)
@@ -573,25 +624,7 @@ int Write(char **args){
     }
     struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *inode_block) * BLOCK_SIZE);
     FreeFile(file);
-    // memcpy(&file, disk + (INODE_BLOCK + *inode_block) * BLOCK_SIZE, sizeof(file));
-    // int block_num = file->block_num;
-    // for(int i = 0;i < block_num;++i){
-    //     D_ReturnBlock(*GetPhysicalBlockNum(file, i));
-    // }
-    // file->block_num = 0;
-    // file->file_size = 0;
     int len = MIN(strlen(args[3]), atoi(args[2]));
-    // block_num = len / BLOCK_SIZE + 1;
-    // for(int i = 0;i < block_num;++i){
-    //     uint64_t* block = GetPhysicalBlockNum(file, i);
-    //     *block = D_GetFreeBlock();
-    //     if(*block == -1){
-    //         printf("FAIL: No enough space!\nWrite error!\n");
-    //         return -1;
-    //     }
-    //     // file.direct[i] = block;
-    //     memcpy(disk + (INODE_BLOCK + *block) * BLOCK_SIZE, args[3] + i * BLOCK_SIZE, BLOCK_SIZE);
-    // }
     WriteAux(file, args[3], len);
     file->block_num = len / BLOCK_SIZE + (len % BLOCK_SIZE != 0);
     file->file_size = len;
@@ -678,10 +711,11 @@ static struct {
     {"rmdir", "rmdir d\n", RemoveDir, 2},
     {"ls", "ls\n", List, 1},
     {"cat", "cat f\n", Cat, 2},
-    {"write", "write f pos l data\n", Write, 5},
-    {"insert", "insert f pos l data\n", Insert, 5},
-    {"delete", "delete f pos l\n", Delete, 4},
+    {"w", "write f pos l data\n", Write, 4},
+    {"i", "insert f pos l data\n", Insert, 5},
+    {"d", "delete f pos l\n", Delete, 4},
     {"e", "exit\n", Exit, 1},
+    {"pwd", "print current working dir\n", PrintCurDir, 1},
 };
 
 void FileSystem(){
@@ -691,12 +725,13 @@ void FileSystem(){
     Format(NULL);
     while(1){
         // printf("$");
-        printf("\033[34m%s\033[0m \033[32m$\033[0m ", pwd);
+        printf("\033[34m%s\033[0m \033[32m$\033[0m ", CurrentDir_Inode->filename);
+        // printf("\033[34m%s\033[0m \033[32m$\033[0m ", pwd);
         // scanf("%s", cmd);
         fgets(cmd, CMD_MAX_LEN, stdin);
         cmd[strcspn(cmd, "\r\n")] = '\0';
         int argc = Get_Args(cmd, args);
-        printf("argc: %d\tcmd: %s\n", argc, cmd);
+        // printf("argc: %d\tcmd: %s\n", argc, cmd);
         int i;
         for(i = 0;i < sz;++i){
             if(strcmp(args[0], cmd_table[i].cmd_name) == 0){
