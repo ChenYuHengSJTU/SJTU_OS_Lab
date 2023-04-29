@@ -28,8 +28,12 @@
 #define SECOND_INDIRECT_BLOCK 4 * 32
 #define CMD_MAX_LEN 256
 #define ENTRY_NUM 32
+// this can be calculated from the max amount of the disk
+#define MAX_DIR_DEPTH 128
 #define MIN(x, y) ((x) < (y) ? (x) : (y))
 #define MAX(x, y) ((x) > (y) ? (x) : (y))
+// \033[34mThis is blue color text!\033[0m\n
+// #define BLUE(text) "\033[34m # text # \033[0m\n"
 
 const char* error_message[]={
     "Format command error...\nUsage: f\n",
@@ -62,7 +66,7 @@ int Get_Args(char* cmd, char* args[]){
 struct Inode{
     char filename[FILENAME_SIZE];
     uint64_t file_size;
-    // here are only two types of file: dir and file
+    // here are only two types of file: dir 1 and file 0
     // 32-bits size for expansion
     uint32_t file_type;
     // permission word , R or W or X 
@@ -94,7 +98,9 @@ struct Block* i_free_block_list = NULL, *i_free_block_tail = NULL, *d_free_block
 // TODO maybe the block number of the cur-dir is a better choice
 uint64_t Current_Dir;
 // useless?
-// struct Inode* CurrentDir_Inode = NULL;
+// be used to store the current dir inode for prompt
+struct Inode* CurrentDir_Inode = NULL;
+char pwd[FILENAME_SIZE * MAX_DIR_DEPTH];
 
 // the disk ,we should divide it into blocks too 
 char* disk = NULL;
@@ -246,6 +252,7 @@ int Format(char **args){
     root.direct[1] = Current_Dir;
     WriteBlock(Current_Dir, (char*)&root, sizeof(root), 0);
     printf("end formatting\n");
+    CurrentDir_Inode = (struct Inode*)(disk +(INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
 }
 
 // add an entry to the dir
@@ -342,9 +349,13 @@ int MakeDir(char **args){
 }
 
 // maybe block num of Inode is more useful
-uint64_t* FindEntry(char* entry_name){
+uint64_t* FindEntry(uint64_t inode_num ,char* entry_name){
     struct Inode *dir, tmp; 
-    dir = (struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
+    dir = (struct Inode*)(disk + (INODE_BLOCK + inode_num) * BLOCK_SIZE);
+    if(dir->file_type == 0){
+        printf("FAIL: %s is not a dir\n", dir->filename);
+        return NULL;
+    }
     // memcpy(&dir, disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE, sizeof(dir));
     for(int i = 0;i < DIRECT_BLOCK;++i){
         if(dir->direct[i] == -1)
@@ -372,11 +383,11 @@ uint64_t* FindEntry(char* entry_name){
 // TODO should consider the relative path and the absolute path
 //  be integrated into the find function
 bool EntryExist(char* entry_name){
-    return FindEntry(entry_name) != NULL;
+    return FindEntry(Current_Dir, entry_name) != NULL;
 }
 // rm f 
 int RemoveFile(char **args){
-    uint64_t* Inode_num = FindEntry(args[1]);
+    uint64_t* Inode_num = FindEntry(Current_Dir , args[1]);
     if(Inode_num == NULL){
         printf("FAIL: No such file!\nDeletion error!\n");
         return -1;
@@ -388,7 +399,7 @@ int RemoveFile(char **args){
 
 // rmdir d
 int RemoveDir(char **args){
-    uint64_t* Inode_num = FindEntry(args[1]);
+    uint64_t* Inode_num = FindEntry(Current_Dir, args[1]);
     if(Inode_num == NULL){
         printf("FAIL: No such dir!\nDeletion error!\n");
         return -1;
@@ -397,6 +408,58 @@ int RemoveDir(char **args){
     // TODO maybe it is not a good practice
     *Inode_num = -1;
 }
+
+// cd path 
+// consider the relative and absolute path
+void ParsePath(char* path, char* dirs[]){
+    assert(path != NULL);
+    int i = 0;
+    if(path[0] == '/'){
+        dirs[i++] = "/";
+        path++;
+    }
+    char* token = strtok(path, "/");
+    while(token != NULL){
+        dirs[i++] = token;
+        token = strtok(NULL, "/");
+    }
+    dirs[i] = NULL;
+}
+
+int ChangeDir(char **args){
+    char* dirs[MAX_DIR_DEPTH];
+    ParsePath(args[1], dirs);
+    uint64_t tmp_cur_dir = 0;
+    int cnt = 0;
+    struct Inode* cur_dir = (struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
+    if(strcmp(dirs[0], "/") == 0){
+        tmp_cur_dir = 0;
+        cnt++;
+    }
+    else if(strcmp(dirs[0], "..") == 0){
+        tmp_cur_dir = cur_dir->direct[1];
+        cnt++;
+    }
+    else if(strcmp(dirs[0], ".") == 0){
+        tmp_cur_dir = Current_Dir;
+        cnt++;
+    }
+    cur_dir = (struct Inode*)(disk + (INODE_BLOCK + tmp_cur_dir) * BLOCK_SIZE);
+    while(dirs[cnt] != NULL){
+        uint64_t* Inode_num = FindEntry(tmp_cur_dir, dirs[cnt]);
+        if(Inode_num == NULL){
+            printf("FAIL: No such dir!\n");
+            return -1;
+        }
+        tmp_cur_dir = *Inode_num;
+        memcpy(cur_dir, disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE, sizeof(*cur_dir));
+        cnt++;
+    }
+    Current_Dir = tmp_cur_dir;
+    CurrentDir_Inode = (struct Inode*)(disk +(INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
+    memcpy(pwd, args[1], strlen(args[1]));
+}
+
 
 void PrintEntry(struct Inode* inode){
     assert(inode != NULL);
@@ -440,8 +503,8 @@ int List(char **args){
 
 // cat f 
 int Cat(char **args){
-    printf("Look file: %s\n", args[1]);
-    uint64_t* Inode_num = FindEntry(args[1]);
+    // printf("Look file: %s\n", args[1]);
+    uint64_t* Inode_num = FindEntry(Current_Dir, args[1]);
     // printf("Find Over\n");
     if(Inode_num == NULL){
         printf("FAIL: No such file!\nCat error\n");
@@ -453,16 +516,25 @@ int Cat(char **args){
         printf("FAIL: %s is a dir!\nCat error\n", args[1]);
         return -1;
     }
-    char* content = (char*)malloc(file.file_size);
-    int sz = file.file_size, i = 0;
-    while(sz > 0){
-        if(i < DIRECT_BLOCK){
-            memcpy(content + (file.file_size - sz), disk + (INODE_BLOCK + file.direct[i]) * BLOCK_SIZE, BLOCK_SIZE);
-            sz -= BLOCK_SIZE;
-        }
-
+    char* content = (char*)malloc(file.file_size + 1);
+    memset(content, 0, file.file_size + 1);
+    int sz = file.file_size, offset = 0;
+    assert(file.file_size / BLOCK_SIZE + (file.file_size % BLOCK_SIZE != 0) == file.block_num);
+    for(int i = 0;i < DIRECT_BLOCK && sz > 0;++i){
+        int len = MIN(sz, BLOCK_SIZE);
+        memcpy(content + offset, disk + (INODE_BLOCK + file.direct[i]) * BLOCK_SIZE, len);
+        sz -= BLOCK_SIZE;
+        offset += BLOCK_SIZE;
     }
-    memcpy(content, disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE, file.file_size);
+    for(int i = 0;i < SECOND_INDIRECT_BLOCK && sz > 0;++i){
+        uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + file.second_indirect[i]) * BLOCK_SIZE);
+        for(int j = 0;j < ENTRY_NUM;++j){
+            int len = MIN(sz, BLOCK_SIZE);
+            memcpy(content + offset, disk + (INODE_BLOCK + second_block[j]) * BLOCK_SIZE, len);
+            sz -= BLOCK_SIZE;
+            offset += BLOCK_SIZE;
+        }
+    }
     printf("%s\n", content);
     free(content);
 }
@@ -494,7 +566,7 @@ int WriteAux(struct Inode* file, char* data, int len){
 // w f l data  
 int Write(char **args){
     char* file_name = args[1];
-    uint64_t* inode_block = FindEntry(file_name);
+    uint64_t* inode_block = FindEntry(Current_Dir, file_name);
     if(inode_block == NULL){
         printf("FAIL: No such file!\nWrite error!\n");
         return -1;
@@ -530,7 +602,7 @@ int Write(char **args){
 // write to a char array and call write
 int Insert(char **args){
     char* file_name = args[1];
-    uint64_t* inode_block = FindEntry(file_name);
+    uint64_t* inode_block = FindEntry(Current_Dir, file_name);
     if(inode_block == NULL){
         printf("FAIL: No such file!\nInsert error!\n");
         return -1;
@@ -558,7 +630,7 @@ int Insert(char **args){
 // d f pos l 
 int Delete(char **args){
     char* file_name = args[1];
-    uint64_t* inode_block = FindEntry(file_name);
+    uint64_t* inode_block = FindEntry(Current_Dir, file_name);
     if(inode_block == NULL){
         printf("FAIL: No such file!\nDelete error!\n");
         return -1;
@@ -602,7 +674,7 @@ static struct {
     {"mkdir", "mkdir d\n", MakeDir, 2},
     {"rm", "rm f\n", RemoveFile, 2},
     //  TODO 
-    // {"cd", "cd path", },{}
+    {"cd", "cd path", ChangeDir, 2},
     {"rmdir", "rmdir d\n", RemoveDir, 2},
     {"ls", "ls\n", List, 1},
     {"cat", "cat f\n", Cat, 2},
@@ -616,8 +688,10 @@ void FileSystem(){
     char cmd[CMD_MAX_LEN];
     char* args[5];
     int sz = sizeof(cmd_table) / sizeof(cmd_table[0]);
+    Format(NULL);
     while(1){
-        printf(">> ");
+        // printf("$");
+        printf("\033[34m%s\033[0m \033[32m$\033[0m ", pwd);
         // scanf("%s", cmd);
         fgets(cmd, CMD_MAX_LEN, stdin);
         cmd[strcspn(cmd, "\r\n")] = '\0';
