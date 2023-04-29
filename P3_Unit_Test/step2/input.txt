@@ -1,0 +1,8 @@
+mk file2
+ls
+mk file3
+w file2 10 hellojieli
+cat file2
+i file2 5 5 foolish
+e
+

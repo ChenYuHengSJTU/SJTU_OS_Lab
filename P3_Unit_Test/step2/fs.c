@@ -122,9 +122,9 @@ uint64_t* GetPhysicalBlockNum(struct Inode* inode, int block_num){
     }
     else if(block_num < DIRECT_BLOCK + SECOND_INDIRECT_BLOCK){
         // get the second indirect block num 
-        int second_indirect_block_num = inode->second_indirect[(block_num - DIRECT_BLOCK) / 32];
+        int second_indirect_block_num = inode->second_indirect[(block_num - DIRECT_BLOCK) / ENTRY_NUM];
         // get the block num in the second indirect block 
-        int block_num_in_second_indirect = (block_num - DIRECT_BLOCK) % 32;
+        int block_num_in_second_indirect = (block_num - DIRECT_BLOCK) % ENTRY_NUM;
         // get the physical block num 
         uint64_t* second_indirect = (uint64_t*)(disk + (DATA_BLOCK + second_indirect_block_num) * BLOCK_SIZE);
         return &(second_indirect[block_num_in_second_indirect]);
@@ -172,6 +172,7 @@ void Init_Block(){
     struct Block* new_block = (struct Block*)malloc(sizeof(struct Block));
     i_free_block_list = new_block;
     i_free_block_tail = new_block;
+    new_block->block_num = 0;
     for(int i = 1;i < DATA_BLOCK;++i){
         new_block = (struct Block*)malloc(sizeof(struct Block));
         new_block->block_num = i;
@@ -182,7 +183,8 @@ void Init_Block(){
     new_block = (struct Block*)malloc(sizeof(struct Block));
     d_free_block_list = new_block;
     d_free_block_tail = new_block;
-    for(int i = DATA_BLOCK;i < block_sum;++i){
+    new_block->block_num = DATA_BLOCK;
+    for(int i = DATA_BLOCK + 1;i < block_sum;++i){
         new_block = (struct Block*)malloc(sizeof(struct Block));
         new_block->block_num = i;
         d_free_block_tail->nxt = new_block;
@@ -199,11 +201,11 @@ uint64_t I_GetFreeBlock(){
     i_free_block_list = i_free_block_list->nxt;
     uint64_t ret = tmp->block_num;
     free(tmp);
-    printf("allocate a block: %ld\n", ret);
+    printf("allocate a inode block: %ld\n", ret);
     return ret;
 }
 
-void I_ReturnBlock(int block_num){
+void I_ReturnBlock(uint64_t block_num){
     struct Block* new_block = (struct Block*)malloc(sizeof(struct Block));
     new_block->block_num = block_num;
     new_block->nxt = NULL;
@@ -211,6 +213,7 @@ void I_ReturnBlock(int block_num){
     i_free_block_tail = new_block;
     if(i_free_block_list == NULL)
         i_free_block_list = new_block;
+    printf("return a inode block: %ld\n", block_num);
 }
 
 uint64_t D_GetFreeBlock(){
@@ -221,11 +224,12 @@ uint64_t D_GetFreeBlock(){
     d_free_block_list = d_free_block_list->nxt;
     uint64_t ret = tmp->block_num;
     free(tmp);
+    printf("allocate a data block: %ld\n", ret);
     return ret;
 }
 
 // return the block to the free block list
-void D_ReturnBlock(int block_num){
+void D_ReturnBlock(uint64_t block_num){
     struct Block* new_block = (struct Block*)malloc(sizeof(struct Block));
     new_block->block_num = block_num;
     new_block->nxt = NULL;
@@ -233,6 +237,7 @@ void D_ReturnBlock(int block_num){
     d_free_block_tail = new_block;
     if(d_free_block_list == NULL)
         d_free_block_list = new_block;
+    printf("return a data block: %ld\n", block_num);
 }
 
 // TODO the duplicating create inode code should be integrated into one function
@@ -399,6 +404,14 @@ uint64_t* FindEntry(uint64_t inode_num ,char* entry_name){
     return NULL;
 }
 
+int FreeFile(struct Inode* file){
+    int block_num = file->block_num;
+    for(int i = 0;i < block_num;++i){
+        D_ReturnBlock(*GetPhysicalBlockNum(file, i));
+    }
+    file->block_num = 0;
+    file->file_size = 0;
+}
 
 // TODO should consider the relative path and the absolute path
 //  be integrated into the find function
@@ -414,10 +427,27 @@ int RemoveFile(char **args){
     }
     // delete the file from the current dir
     // TODO maybe it is not a good practice, but maybe faster
+    struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE);
+    if(file->file_type == 1){
+        printf("FAIL: %s is not a file\n", file->filename);
+        return -1;
+    }
+    FreeFile(file);
     I_ReturnBlock(*Inode_num);
     *Inode_num = -1;
 }
 
+// TODO 
+int FreeDir(struct Inode* dir){
+    int block_num = dir->block_num;
+    for(int i = 0;i < block_num;++i){
+        I_ReturnBlock(*GetPhysicalBlockNum(dir, i));
+    }
+    dir->block_num = 0;
+    dir->file_size = 0;
+}
+
+// Dir has to be recursively deleted
 // rmdir d
 int RemoveDir(char **args){
     uint64_t* Inode_num = FindEntry(Current_Dir, args[1]);
@@ -427,6 +457,11 @@ int RemoveDir(char **args){
     }
     // delete the dir from the current dir
     // TODO maybe it is not a good practice
+    struct Inode* dir = (struct Inode*)(disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE);
+    if(dir->file_type == 0){
+        printf("FAIL: %s is not a dir\n", dir->filename);
+        return -1;
+    }
     I_ReturnBlock(*Inode_num);
     *Inode_num = -1;
 }
@@ -573,7 +608,7 @@ int Cat(char **args){
     assert(file.file_size / BLOCK_SIZE + (file.file_size % BLOCK_SIZE != 0) == file.block_num);
     for(int i = 0;i < DIRECT_BLOCK && sz > 0;++i){
         int len = MIN(sz, BLOCK_SIZE);
-        memcpy(content + offset, disk + (INODE_BLOCK + file.direct[i]) * BLOCK_SIZE, len);
+        memcpy(content + offset, disk + (DATA_BLOCK + file.direct[i]) * BLOCK_SIZE, len);
         sz -= BLOCK_SIZE;
         offset += BLOCK_SIZE;
     }
@@ -581,22 +616,13 @@ int Cat(char **args){
         uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + file.second_indirect[i]) * BLOCK_SIZE);
         for(int j = 0;j < ENTRY_NUM;++j){
             int len = MIN(sz, BLOCK_SIZE);
-            memcpy(content + offset, disk + (INODE_BLOCK + second_block[j]) * BLOCK_SIZE, len);
+            memcpy(content + offset, disk + (DATA_BLOCK + second_block[j]) * BLOCK_SIZE, len);
             sz -= BLOCK_SIZE;
             offset += BLOCK_SIZE;
         }
     }
     printf("%s\n", content);
     free(content);
-}
-
-int FreeFile(struct Inode* file){
-    int block_num = file->block_num;
-    for(int i = 0;i < block_num;++i){
-        D_ReturnBlock(*GetPhysicalBlockNum(file, i));
-    }
-    file->block_num = 0;
-    file->file_size = 0;
 }
 
 int WriteAux(struct Inode* file, char* data, int len){
@@ -610,16 +636,21 @@ int WriteAux(struct Inode* file, char* data, int len){
             return -1;
         }
         // file.direct[i] = block;
-        memcpy(disk + (INODE_BLOCK + *block) * BLOCK_SIZE, data + i * BLOCK_SIZE, BLOCK_SIZE);
+        memcpy(disk + (DATA_BLOCK + *block) * BLOCK_SIZE, data + i * BLOCK_SIZE, BLOCK_SIZE);
     }
 }
 
 // w f l data  
 int Write(char **args){
+    printf("Write called\n");
     char* file_name = args[1];
     uint64_t* inode_block = FindEntry(Current_Dir, file_name);
     if(inode_block == NULL){
         printf("FAIL: No such file!\nWrite error!\n");
+        return -1;
+    }
+    if(atoi(args[2]) < 0){
+        printf("FAIL: Invalid length!\nWrite error!\n");
         return -1;
     }
     struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *inode_block) * BLOCK_SIZE);
@@ -640,24 +671,44 @@ int Insert(char **args){
         printf("FAIL: No such file!\nInsert error!\n");
         return -1;
     }
+    if(atoi(args[2]) < 0){
+        printf("FAIL: Invalid position!\nInsert error!\n");
+        return -1;
+    }
+    if(atoi(args[3]) < 0){
+        printf("FAIL: Invalid length!\nInsert error!\n");
+        return -1;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
+    }
     struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *inode_block) * BLOCK_SIZE);
     int len = MIN(strlen(args[4]), atoi(args[3]));
     char* content = (char*)malloc(file->file_size + len);
-    int data_before_blk_num = atoi(args[2]) / BLOCK_SIZE + (atoi(args[2]) % BLOCK_SIZE != 0);
+    memset(content, 0, file->file_size + len);
+    int data_before_blk_num = atoi(args[2]) / BLOCK_SIZE;
+    printf("data_before_blk_num: %d\n", data_before_blk_num);
+    // int data_before_blk_num = atoi(args[2]) / BLOCK_SIZE + (atoi(args[2]) % BLOCK_SIZE != 0);
     for(int i = 0;i < data_before_blk_num;++i){
         memcpy(content + i * BLOCK_SIZE, disk + (DATA_BLOCK + *GetPhysicalBlockNum(file, i)) * BLOCK_SIZE, BLOCK_SIZE);
     }
-    int offset = atoi(args[2]);
-    memcpy(content + atoi(args[2]), args[4], len);
+    int offset = data_before_blk_num * BLOCK_SIZE;  
+    printf("%d\n", offset);
+    memcpy(content + offset, disk + (DATA_BLOCK + *GetPhysicalBlockNum(file, data_before_blk_num + 1) * BLOCK_SIZE), atoi(args[2]) % BLOCK_SIZE);
+    offset += atoi(args[2]) % BLOCK_SIZE;
+    printf("%d\n", offset);
+    memcpy(content + offset, args[4], len);
     offset += len;
+    printf("%d\n", offset);
+    printf("%s\n", content);
     memcpy(content + offset, disk + (DATA_BLOCK + *GetPhysicalBlockNum(file, data_before_blk_num - (atoi(args[2]) % BLOCK_SIZE != 0))) * BLOCK_SIZE, BLOCK_SIZE - atoi(args[2]) % BLOCK_SIZE);
+    printf("%s\n", content);  
     offset += BLOCK_SIZE - atoi(args[2]) % BLOCK_SIZE;
     for(int i = data_before_blk_num + 1;i < file->block_num;++i){
         memcpy(content + offset, disk + (DATA_BLOCK + *GetPhysicalBlockNum(file, i)) * BLOCK_SIZE, BLOCK_SIZE);
         offset += BLOCK_SIZE;
     }
+    printf("%s\n", content);
     FreeFile(file);
     WriteAux(file, content, file->file_size + len);
+    free(content);
 }
 
 // d f pos l 
