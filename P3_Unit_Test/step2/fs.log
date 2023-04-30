@@ -1,9 +1,0 @@
-Welcome to the file system!
-disk size: 2560000
-Format: Start to format the disk
-InitBlock: Init the blocks
-InitBlock: Init the blocks successfully
-Format: Finish formatting the disk
-ReturnBlock: Return the blocks
-ReturnBlock: Return the blocks successfully
-Goodbye
