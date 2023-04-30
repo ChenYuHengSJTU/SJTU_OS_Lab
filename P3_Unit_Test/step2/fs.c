@@ -457,6 +457,7 @@ uint64_t* FindEntry(uint64_t inode_num ,char* entry_name){
 
 int FreeFile(struct Inode* file){
     int block_num = file->block_num;
+    // printf("block_num: %d\n", block_num);
     for(int i = 0;i < block_num;++i){
         D_ReturnBlock(*GetPhysicalBlockNum(file, i));
     }
@@ -492,9 +493,40 @@ int RemoveFile(char **args){
 
 // TODO 
 int FreeDir(struct Inode* dir){
-    int block_num = dir->block_num;
-    for(int i = 0;i < block_num;++i){
-        I_ReturnBlock(*GetPhysicalBlockNum(dir, i));
+    // int block_num = dir->block_num;
+    assert(dir != NULL);
+    assert(dir->file_type == 1);
+    for(int i = 2;i < DIRECT_BLOCK;++i){
+        if(dir->direct[i] == -1)
+            continue;
+        struct Inode* tmp = (struct Inode*)(disk + (INODE_BLOCK + dir->direct[i]) * BLOCK_SIZE);
+        if(tmp->file_type == 1){
+            FreeDir(tmp);
+        }
+        else{
+            FreeFile(tmp);
+        }
+        I_ReturnBlock(dir->direct[i]);
+        // I_ReturnBlock(*GetPhysicalBlockNum(dir, i));
+    }
+    for(int j = 0;j < 4;++j){
+        if(dir->second_indirect[j] == -1)
+            continue;
+        // assert(0);
+        uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + dir->second_indirect[j]) * BLOCK_SIZE);
+        for(int i = 0;i < ENTRY_NUM;++i){
+            if(second_block[i] == -1)
+                continue;
+            struct Inode* tmp = (struct Inode*)(disk + (INODE_BLOCK + second_block[i]) * BLOCK_SIZE);
+            if(tmp->file_type == 1){
+                FreeDir(tmp);
+            }
+            else{
+                FreeFile(tmp);
+            }
+            I_ReturnBlock(second_block[i]);
+        }
+        I_ReturnBlock(dir->second_indirect[j]);
     }
     dir->block_num = 0;
     dir->file_size = 0;
@@ -517,6 +549,7 @@ int RemoveDir(char **args){
         fprintf(fs_log, "FAIL: %s is not a dir\n", dir->filename);
         return -1;
     }
+    FreeDir(dir);
     I_ReturnBlock(*Inode_num);
     *Inode_num = -1;
 }

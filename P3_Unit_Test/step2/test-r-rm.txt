@@ -1,0 +1,14 @@
+mkdir tmp
+cd tmp
+mk file1
+mkdir files
+cd files
+mk file1
+mk file2
+ls
+cd ..
+ls
+cd ..
+ls
+rmdir tmp
+e
