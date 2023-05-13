@@ -1,20 +1,14 @@
 Welcome to the file system!
-disk size: 2560000
+disk size: 4194304
 Format: Start to format the disk
 InitBlock: Init the blocks
 InitBlock: Init the blocks successfully
-Allocate free inode block: 0
 Format: Finish formatting the disk
-[32mDone[0m
-[34mmk file1
-[0mAllocate free inode block: 1
 [34mls
-[0m[34mw file1 10 hellojieli
-[0mAllocate free inode block: 0
-[34mls
-[0m[34mrm file1
-[0m[34mls
-[0m[34me
+[0m.	0	D	2023-5-13 17:1:11	
+..	0	D	2023-5-13 17:1:11	
+[32mYES[0m
+[34me
 [0mReturnBlock: Return the blocks
 ReturnBlock: Return the blocks successfully
 Goodbye

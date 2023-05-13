@@ -6,6 +6,9 @@
 #include<assert.h>
 #include<string.h>
 #include<time.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <netinet/in.h>
 
 #define FILENAMESIZE 100
 
@@ -101,221 +104,31 @@ struct Block* i_free_block_list = NULL, *i_free_block_tail = NULL, *d_free_block
 uint64_t Current_Dir;
 // useless?
 // be used to store the current dir inode for prompt
-struct Inode* CurrentDir_Inode = NULL;
+struct Inode CurrentDir_Inode;
 char pwd[FILENAME_SIZE * MAX_DIR_DEPTH];
+// struct Inode dir;
 
 // the disk ,we should divide it into blocks too 
-char* disk = NULL;
+// char* disk = NULL;
 FILE* fs_log = NULL;
 // to share the code 
-#define CYLINDER 50
-#define SEC_PER_CYLINDER 200
-#define DISK_SIZE CYLINDER * SEC_PER_CYLINDER * BLOCK_SIZE
+#define BLOCK_NUM 16384
+// #define CYLINDER 50
+// #define SEC_PER_CYLINDER 200
+// #define DISK_SIZE CYLINDER * SEC_PER_CYLINDER * BLOCK_SIZE
+#define DISK_SIZE BLOCK_NUM * BLOCK_SIZE
 
 // we may not need super block and log block here 
 #define INODE_BLOCK 0
-#define DATA_BLOCK CYLINDER * SEC_PER_CYLINDER / 3
+#define DATA_BLOCK (BLOCK_NUM >> 2)
+#define MAX_FILE_SIZE (BLOCK_NUM - DATA_BLOCK) * (BLOCK_SIZE)
 
-// the inode bitmap and data bitmap
-// the most significant bit is not in use 
-// use tree array to organize the bitmap
-// since the tree array represent the sum of a range of bits, so it is uint64, but single element is uint32
-#define I_LEN 4096
-#define D_LEN (4096 << 2)
-uint64_t inode_bitmap[I_LEN + 1];
-uint64_t data_bitmap[D_LEN + 1];
+// socket 
+int client_fd, socket_fd, fs_fd;
+struct sockaddr_in server_addr, client_addr, disk_addr;
+socklen_t client_len, disk_len;
 
-void InitBitmap(){
-    printf("InitBitmap Done\nInode bitmap use %d blocks\nData bitmap use %d blocks\n", DATA_BLOCK / 31 + 1, (CYLINDER * SEC_PER_CYLINDER - DATA_BLOCK) / 31 + 1);
-}
-
-#define LOWBIT(x) ((x) & (-x))
-#define I_BITMAP_LEN (DATA_BLOCK / 31 + 1)
-#define D_BITMAP_LEN ((CYLINDER * SEC_PER_CYLINDER - DATA_BLOCK) / 31 + 1)
-
-void I_AddAux(uint32_t x, int32_t k){
-    while(x <= I_LEN){
-        // printf("x = %d\n", x); 
-        inode_bitmap[x] = (int32_t)inode_bitmap[x] + k;
-        x += LOWBIT(x);
-    }
-}
-
-uint64_t I_GetSumAux(uint32_t k){
-    uint64_t sum = 0;
-    assert(k <= I_LEN);
-    while(k > 0){
-        sum += inode_bitmap[k];
-        k -= LOWBIT(k);
-    }
-    return sum;
-}
-
-uint32_t I_GetElem(uint32_t i){
-    return I_GetSumAux(i) - I_GetSumAux(i- 1);
-}
-
-void D_AddAux(uint32_t x, int32_t k){
-    while(x <= D_LEN){
-        data_bitmap[x] = (uint32_t)data_bitmap[x] + k;
-        x += LOWBIT(x);
-    }
-}
-
-uint64_t D_GetSumAux(uint32_t k){
-    uint64_t sum = 0;
-    assert(k <= D_LEN);
-    while(k > 0){
-        sum += data_bitmap[k];
-        k -= LOWBIT(k);
-    }
-    return sum;
-}
-
-uint32_t D_GetElem(uint32_t i){
-    return D_GetSumAux(i) - D_GetSumAux(i- 1);
-}
-
-// get the sum of the first k bits
-// TODO 
-#define I_FULL 0x7fffffff
-uint64_t I_GetFreeBlock(){
-    int l = 1;
-    int r = I_LEN;
-    int mid;
-
-    while(1){
-        // l == r
-        if(l == r){
-            break;
-        }
-        mid = (l + r) >> 1;
-        if(I_GetSumAux(mid) == I_FULL * mid){
-            l = mid + 1;
-        }
-        else{
-            r = mid;
-        }
-        // printf("mid = %d\n", mid);
-    }
-
-    // printf("l = %d\n", l);
-    // printf("r = %d\n", r);
-    // printf("I_GetElem(l) = %d\n", I_GetElem(l));
-    // printf("%u %u %u\n" , inode_bitmap[1], inode_bitmap[2], inode_bitmap[3]);
-    assert(l == r);
-
-    int free_byte = r;
-    for(;free_byte <= r + LOWBIT(r); ++free_byte){
-        // printf("free_byte = %d\n", free_byte);
-        if(I_GetElem(free_byte) != I_FULL){
-            break;
-        }
-    }
-
-    assert(I_GetElem(free_byte) != I_FULL);
-    // printf("free_byte = %d\n", free_byte);
-    assert(free_byte <= r + LOWBIT(r) && free_byte >= 0);
-    int free_bit = 0;
-    int tmp = I_GetElem(free_byte);
-    while((tmp & (1 << free_bit)) && free_bit < 31){
-        // printf("free_bit = %d\n", free_bit); 
-        ++free_bit;
-    }
-    assert(free_bit < 31);
-
-    I_AddAux(free_byte, 1 << free_bit);
-
-    // printf("free_byte = %d, free_bit = %d\n", free_byte, free_bit);
-    // printf("free block num: %d\n", free_byte * 31 + free_bit);
-
-    // printf("free_bit = %d\n", free_bit); 
-    fprintf(fs_log, "Allocate free inode block: %d\n", (free_byte - 1) * 31 + free_bit);
-    // printf("Allocate free inode block: %d\n", (free_byte - 1) * 31 + free_bit);
-
-    return (free_byte - 1) * 31 + free_bit;
-}
-
-void I_ReturnBlock(uint64_t block_num){
-    // printf("block_num = %d\n", block_num);
-    int byte = block_num / 31 + 1;
-    // block_num += 1;
-    int bit = block_num % 31;
-
-    // printf("byte = %d, bit = %d\n", byte, bit);
-    // printf("I_GetElem(byte) = %d\n", I_GetElem(byte));
-
-    assert(I_GetElem(byte) & (1 << bit));
-
-    I_AddAux(byte, -(1 << bit));
-}
-
-#define D_FULL 0x7fffffff
-uint64_t D_GetFreeBlock(){
-    int l = 1;
-    int r = D_LEN;
-    int mid;
-
-    while(1){
-        // l == r
-        if(l == r){
-            break;
-        }
-        mid = (l + r) >> 1;
-        if(D_GetSumAux(mid) == D_FULL * mid){
-            l = mid + 1;
-        }
-        else{
-            r = mid;
-        }
-        // printf("mid = %d\n", mid);
-    }
-
-    // printf("l = %d\n", l);
-    // printf("r = %d\n", r);
-    // printf("I_GetElem(l) = %d\n", D_GetElem(l));
-    // printf("%u %u %u\n" , inode_bitmap[1], inode_bitmap[2], inode_bitmap[3]);
-    assert(l == r);
-
-    int free_byte = r;
-    for(;free_byte <= r + LOWBIT(r); ++free_byte){
-        // printf("free_byte = %d\n", free_byte);
-        if(D_GetElem(free_byte) != D_FULL){
-            break;
-        }
-    }
-
-    assert(D_GetElem(free_byte) != D_FULL);
-    // printf("free_byte = %d\n", free_byte);
-    assert(free_byte <= r + LOWBIT(r) && free_byte >= 0);
-    int free_bit = 0;
-    int tmp = D_GetElem(free_byte);
-    while((tmp & (1 << free_bit)) && free_bit < 31){
-        // printf("free_bit = %d\n", free_bit); 
-        ++free_bit;
-    }
-    assert(free_bit < 31);
-
-    D_AddAux(free_byte, 1 << free_bit);
-
-    // printf("free_byte = %d, free_bit = %d\n", free_byte, free_bit);
-    // printf("free block num: %d\n", free_byte * 31 + free_bit);
-
-    // printf("free_bit = %d\n", free_bit); 
-    fprintf(fs_log, "Allocate free inode block: %d\n", (free_byte - 1) * 31 + free_bit);
-    // printf("Allocate free inode block: %d\n", (free_byte - 1) * 31 + free_bit);
-
-    return (free_byte - 1) * 31 + free_bit + DATA_BLOCK;
-}
-
-void D_ReturnBlock(uint64_t block_num){
-    // block_num += 1;
-    block_num -= DATA_BLOCK;
-    int byte = block_num / 31 + 1;
-    int bit = block_num % 31;
-    assert(D_GetElem(byte) & (1 << bit));
-    D_AddAux(byte, -(1 << bit));
-}
+char output[MAX_FILE_SIZE];
 
 // some block-related functions
 // calculate the physical block num 
@@ -330,7 +143,9 @@ uint64_t* GetPhysicalBlockNum(struct Inode* inode, int block_num){
         // get the block num in the second indirect block 
         int block_num_in_second_indirect = (block_num - DIRECT_BLOCK) % ENTRY_NUM;
         // get the physical block num 
-        uint64_t* second_indirect = (uint64_t*)(disk + (INODE_BLOCK + second_indirect_block_num) * BLOCK_SIZE);
+        uint64_t second_indirect[ENTRY_NUM];
+        // uint64_t* second_indirect = (uint64_t*)(disk + (INODE_BLOCK + second_indirect_block_num) * BLOCK_SIZE);
+        ReadBlock(second_indirect_block_num + INODE_BLOCK, (char*)second_indirect, BLOCK_SIZE, 0, 0);
         return &(second_indirect[block_num_in_second_indirect]);
     }
     else{
@@ -339,41 +154,87 @@ uint64_t* GetPhysicalBlockNum(struct Inode* inode, int block_num){
     }
 }
 
+
+// TODO access the disk 
+// flag 0 - read, 1 - write
+int AccessDisk(int flag, uint64_t block_num, char* data, size_t n, size_t offset){
+    // combine them to a char array
+    // printf("AccessDisk: %ld %s %ld %ld\n", block_num, data, n, offset);
+    // printf("a1 time: %s\n", data + 120);
+    char _data[CMD_MAX_LEN + BLOCK_SIZE + 1];
+    memset(_data, '\0', CMD_MAX_LEN + BLOCK_SIZE +1);
+    if(flag == 0){
+        sprintf(_data, "%d %ld %d %d", flag, block_num, n, offset);
+    }
+    else
+        // sprintf(_data, "%d %ld %d %d %s", flag, block_num, n, offset, data);
+    {
+        sprintf(_data, "%d %ld %d %d", flag, block_num, n, offset);
+        memcpy(_data + CMD_MAX_LEN, data, n);
+    }
+    if(flag){
+        printf("WriteDisk: ");
+    }
+    else{
+        printf("ReadDisk: ");
+    }
+    printf("%s\n", _data);
+    // printf("a2 time: %s\n", data + 120);
+    // fflush(stdout);
+    // sleep(1);
+    // write(fs_fd, _data, BLOCK_SIZE * 2 + 1);
+    send(fs_fd, _data, BLOCK_SIZE * 2 + 1, 0);
+    if(flag == 0){
+        memset(data, 0, BLOCK_SIZE + 1);
+        recv(fs_fd, data, BLOCK_SIZE + 1, 0);
+        // read(fs_fd, data, BLOCK_SIZE + 1);
+    }
+}
+
+
 // write to the block (if can combined with read?)
 // block num is the physical block num
 // TODO consider the parameter, offset should be a must
 // flag means the inode block or the data block
 // 0 - inode block, 1 - data block
+// the flag parameter is somewhat useless
+// but remain it for further use
 int WriteBlock(uint64_t block_num, char* data, size_t n, size_t offset, int flag){
     // get the physical block num 
     // int physical_block_num = GetPhysicalBlockNum(block_num);
     // write to the disk 
+    // printf("w time: %s\n", data + 120);
     if(offset >= BLOCK_SIZE){
-        fprintf(stderr, "FAIL: offset is too large\n");
+        sprintf(output+strlen(output), "FAIL: offset is too large\n");
         return -1;
     }
     // if(!flag)
-        memcpy(disk + (INODE_BLOCK + block_num) * BLOCK_SIZE + offset, data, n);
+        // memcpy(disk + (INODE_BLOCK + block_num) * BLOCK_SIZE + offset, data, n);
     // else 
         // memcpy(disk + (DATA_BLOCK + block_num) * BLOCK_SIZE + offset, data, n);
+    AccessDisk(1, block_num, data, n, offset);
 }
 
 // read from the block
 int ReadBlock(uint64_t block_num, char* data, size_t n, size_t offset, int flag){
     if(offset >= BLOCK_SIZE){
-        fprintf(stderr, "FAIL: offset is too large\n");
+        sprintf(output+strlen(output), "FAIL: offset is too large\n");
         return -1;
     }
     // if(!flag)
-        memcpy(data, disk + (INODE_BLOCK + block_num) * BLOCK_SIZE + offset, n);
+        // memcpy(data, disk + (INODE_BLOCK + block_num) * BLOCK_SIZE + offset, n);
     // else 
         // memcpy(data, disk + (DATA_BLOCK + block_num) * BLOCK_SIZE + offset, n);
+    char tmp[BLOCK_SIZE] = "";
+    AccessDisk(0, block_num, tmp, n, offset);
+    printf("ReadBlock: %s\n", tmp);
+    memcpy(data, tmp, n);
 }
 
 // Initialize the Disk 
 void Init_Block(){
     fprintf(fs_log, "InitBlock: Init the blocks\n");
-    int block_sum = CYLINDER * SEC_PER_CYLINDER;
+    int block_sum = BLOCK_NUM;
     struct Block* new_block = (struct Block*)malloc(sizeof(struct Block));
     i_free_block_list = new_block;
     i_free_block_tail = new_block;
@@ -417,53 +278,53 @@ void ReturnBlock(){
 
 // also some functions to maintain the free block list 
 // get the free block
-// uint64_t I_GetFreeBlock(){
-//     if(i_free_block_list == NULL){
-//         return -1;
-//     }
-//     struct Block* tmp = i_free_block_list;
-//     i_free_block_list = i_free_block_list->nxt;
-//     uint64_t ret = tmp->block_num;
-//     free(tmp);
-// 	fprintf(fs_log ,"allocate a inode block: %ld\n", ret);
-//     return ret;
-// }
+uint64_t I_GetFreeBlock(){
+    if(i_free_block_list == NULL){
+        return -1;
+    }
+    struct Block* tmp = i_free_block_list;
+    i_free_block_list = i_free_block_list->nxt;
+    uint64_t ret = tmp->block_num;
+    free(tmp);
+    sprintf(output+strlen(output), "allocate a inode block: %ld\n", ret);
+    return ret;
+}
 
-// void I_ReturnBlock(uint64_t block_num){
-//     struct Block* new_block = (struct Block*)malloc(sizeof(struct Block));
-//     new_block->block_num = block_num;
-//     new_block->nxt = NULL;
-//     i_free_block_tail->nxt = new_block;
-//     i_free_block_tail = new_block;
-//     if(i_free_block_list == NULL)
-//         i_free_block_list = new_block;
-// 	fprintf(fs_log ,"return a inode block: %ld\n", block_num);
-// }
+void I_ReturnBlock(uint64_t block_num){
+    struct Block* new_block = (struct Block*)malloc(sizeof(struct Block));
+    new_block->block_num = block_num;
+    new_block->nxt = NULL;
+    i_free_block_tail->nxt = new_block;
+    i_free_block_tail = new_block;
+    if(i_free_block_list == NULL)
+        i_free_block_list = new_block;
+    sprintf(output+strlen(output), "return a inode block: %ld\n", block_num);
+}
 
-// uint64_t D_GetFreeBlock(){
-//     if(d_free_block_list == NULL){
-//         return -1;
-//     }
-//     struct Block* tmp = d_free_block_list;
-//     d_free_block_list = d_free_block_list->nxt;
-//     uint64_t ret = tmp->block_num;
-//     // assert(tmp != NULL && ret >= DATA_BLOCK);
-//     free(tmp);
-// 	fprintf(fs_log ,"allocate a data block: %ld\n", ret);
-//     return ret;
-// }
+uint64_t D_GetFreeBlock(){
+    if(d_free_block_list == NULL){
+        return -1;
+    }
+    struct Block* tmp = d_free_block_list;
+    d_free_block_list = d_free_block_list->nxt;
+    uint64_t ret = tmp->block_num;
+    // assert(tmp != NULL && ret >= DATA_BLOCK);
+    free(tmp);
+    sprintf(output+strlen(output), "allocate a data block: %ld\n", ret);
+    return ret;
+}
 
-// // return the block to the free block list
-// void D_ReturnBlock(uint64_t block_num){
-//     struct Block* new_block = (struct Block*)malloc(sizeof(struct Block));
-//     new_block->block_num = block_num;
-//     new_block->nxt = NULL;
-//     d_free_block_tail->nxt = new_block;
-//     d_free_block_tail = new_block;
-//     if(d_free_block_list == NULL)
-//         d_free_block_list = new_block;
-// 	fprintf(fs_log ,"return a data block: %ld\n", block_num);
-// }
+// return the block to the free block list
+void D_ReturnBlock(uint64_t block_num){
+    struct Block* new_block = (struct Block*)malloc(sizeof(struct Block));
+    new_block->block_num = block_num;
+    new_block->nxt = NULL;
+    d_free_block_tail->nxt = new_block;
+    d_free_block_tail = new_block;
+    if(d_free_block_list == NULL)
+        d_free_block_list = new_block;
+    sprintf(output+strlen(output), "return a data block: %ld\n", block_num);
+}
 
 void GetTime(char* Time){
     // time_t now;
@@ -482,13 +343,13 @@ int Format(char **args){
     fprintf(fs_log, "Format: Start to format the disk\n");
     static bool initialized = false;
     if(initialized){
-        printf("Format: the disk has been initialized\nNothing to do...\n");
+        sprintf(output+strlen(output), "Format: the disk has been initialized\nNothing to do...\n");
         fprintf(fs_log, "Format: Do nothing since the disk has been initialized\n");
         return -1;
     }
     // Here should create the root dir 
-    disk = (char*)malloc(DISK_SIZE);
-    memset(disk, 0, sizeof(disk));
+    // disk = (char*)malloc(DISK_SIZE);
+    // memset(disk, 0, sizeof(disk));
     // init the free block list
     Init_Block();
     // create the root dir
@@ -517,19 +378,25 @@ int Format(char **args){
     // TODO may 0 is a no-worse choice
     root.direct[1] = Current_Dir;
     GetTime(root.Time);
-    WriteBlock(Current_Dir, (char*)&root, sizeof(root), 0, 0);
-    // printf("end formatting\n");
+    // printf("root time: %s\n", root.Time);
+    WriteBlock(Current_Dir + INODE_BLOCK, (char*)&root, sizeof(root), 0, 0);
+    char block[BLOCK_SIZE + 1] = "";
+    printf("root content :%s\n", (char*)&root);
+    memcpy(block, &root, sizeof(root));
+    printf("root content :%s len: %ld\n", block, strlen(block));
+    printf("time: %s\n", block + (root.Time - (char*)&root));
+    // sprintf(output+strlen(output), "end formatting\n");
     fprintf(fs_log, "Format: Finish formatting the disk\n");
-	fprintf(fs_log ,"\033[32mDone\033[0m\n");
-    printf("\033[32mDone\033[0m\n");
-    CurrentDir_Inode = (struct Inode*)(disk +(INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
-    return 0;
+    // CurrentDir_Inode = (struct Inode*)(disk +(INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
+    printf("CurrentDir_Inode: %s\n", CurrentDir_Inode.filename);
+    ReadBlock(Current_Dir + INODE_BLOCK, (char*)&CurrentDir_Inode, sizeof(CurrentDir_Inode), 0, 0);
+    printf("CurrentDir_Inode: %s\n", CurrentDir_Inode.filename);
 }
 
 // add an entry to the dir
 void AddEntry(struct Inode* dir, uint64_t inode_num){
     // find the first empty entry
-    // printf("add entry to %s\n", dir->filename);
+    // sprintf(output+strlen(output), "add entry to %s\n", dir->filename);
     for(int i = 0;i < DIRECT_BLOCK;++i){
         if(dir->direct[i] == -1){
             dir->direct[i] = inode_num;
@@ -539,16 +406,18 @@ void AddEntry(struct Inode* dir, uint64_t inode_num){
     }
     for(int j = 0;j < 4;++j){
         if(dir->second_indirect[j] == -1){
-            dir->second_indirect[j] = I_GetFreeBlock();
-            uint64_t* indirect_block = (uint64_t*)(disk + (INODE_BLOCK + dir->second_indirect[j]) * BLOCK_SIZE);
+            dir->second_indirect[j] = D_GetFreeBlock();
+            uint64_t indirect_block[ENTRY_NUM];
+            // uint64_t* indirect_block = (uint64_t*)(disk + (INODE_BLOCK + dir->second_indirect[j]) * BLOCK_SIZE);
+            // uint64_t* indirect_block = (uint64_t*)malloc(BLOCK_SIZE);
+            ReadBlock(dir->second_indirect[j] + INODE_BLOCK, (char*)&indirect_block, sizeof(indirect_block), 0, 0);
             indirect_block[0] = inode_num;
-            // detail
-            for(int i = 1;i < ENTRY_NUM;++i)
-                indirect_block[i] = -1;
             dir->block_num++;
             return;
         }
-        uint64_t* indirect_block = (uint64_t*)(disk + (INODE_BLOCK + dir->second_indirect[j]) * BLOCK_SIZE);
+        // uint64_t* indirect_block = (uint64_t*)(disk + (INODE_BLOCK + dir->second_indirect[j]) * BLOCK_SIZE);
+        uint64_t indirect_block[ENTRY_NUM];
+        ReadBlock(dir->second_indirect[j] + INODE_BLOCK, (char*)&indirect_block, sizeof(indirect_block), 0, 0);
         for(int i = 0;i < ENTRY_NUM;++i){
             if(indirect_block[i] == -1){
                 indirect_block[i] = inode_num;
@@ -557,14 +426,22 @@ void AddEntry(struct Inode* dir, uint64_t inode_num){
             }
         }
     }
-    printf("Fail: Current Dir has no space for new entry\n");
+    sprintf(output+strlen(output), "Fail: Current Dir has no space for new entry\n");
     fprintf(fs_log, "Fail: Current Dir has no space for new entry\n");
     return;
 }
 
+uint64_t* FindEntry(uint64_t inode_num ,char* entry_name);
+
 // mk f 
 // TODO we need to find a inode entry for each file and dir too by traversing the dir-inode
 int MakeFile(char **args){
+    uint64_t* inode_num = FindEntry(Current_Dir ,args[1]);
+    if(inode_num != NULL){
+        sprintf(output+strlen(output), "FAIL: File %s already exists\n", args[1]);
+        fprintf(fs_log, "FAIL: File %s already exists\n", args[1]);
+        return -1;
+    }
     struct Inode new_file;
     strcpy(new_file.filename, args[1]);
     new_file.file_size = 0;
@@ -579,7 +456,7 @@ int MakeFile(char **args){
     // use the unified API
     int Inode_num = I_GetFreeBlock();
     if(Inode_num == -1){
-        printf("FAIL: No enough space to create file!\nDir and File number is up to the limit\n");
+        sprintf(output+strlen(output), "FAIL: No enough space to create file!\nDir and File number is up to the limit\n");
         fprintf(fs_log, "FAIL: No enough space to create file! Dir and File number is up to the limit\n");
         return -1;
     }
@@ -592,12 +469,21 @@ int MakeFile(char **args){
     // TODO how to use unified API is a difficult here, add file to a dir is the same with add sub-dir to a dir, both them could be implemented by writing blocks 
     // int physical_block = GetPhysicalBlockNum(&Current_Dir, last_block);
     // AddEntry(&Current_Dir, Inode_num);
-    AddEntry((struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE), Inode_num);
-    return 0;
+    struct Inode dir;
+    ReadBlock(Current_Dir + INODE_BLOCK, (char*)&dir, sizeof(dir), 0, 0);
+    // AddEntry((struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE), Inode_num);256 
+    AddEntry(&dir, Inode_num);
+    WriteBlock(Current_Dir + INODE_BLOCK, (char*)&dir, sizeof(dir), 0, 0);
 }
 
 // mkdir d 
 int MakeDir(char **args){
+    uint64_t* inode_num = FindEntry(Current_Dir ,args[1]);
+    if(inode_num != NULL){
+        sprintf(output+strlen(output), "FAIL: Dir %s already exists\n", args[1]);
+        fprintf(fs_log, "FAIL: Dir %s already exists\n", args[1]);
+        return -1;
+    }
     struct Inode new_dir;
     strcpy(new_dir.filename, args[1]);
     new_dir.file_size = 0;
@@ -616,12 +502,15 @@ int MakeDir(char **args){
     // use the unified API
     int Inode_num = I_GetFreeBlock();
     if(Inode_num == -1){
-        printf("FAIL: No enough space to create dir!\nDir and File number is up to the limit\n");
+        sprintf(output+strlen(output), "FAIL: No enough space to create dir!\nDir and File number is up to the limit\n");
         fprintf(fs_log, "FAIL: No enough space to create dir! Dir and File number is up to the limit\n");
         return -1;
     }
     // add the new dir to the current dir
-    AddEntry((struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE), Inode_num);
+    // AddEntry((struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE), Inode_num);
+    struct Inode dir;
+    ReadBlock(Current_Dir + INODE_BLOCK, (char*)&dir, sizeof(dir), 0, 0);
+    AddEntry(&dir, Inode_num);
     // AddEntry(&new_dir, Inode_num);
     new_dir.direct[0] = Inode_num;
     new_dir.direct[1] = Current_Dir;
@@ -629,34 +518,43 @@ int MakeDir(char **args){
     GetTime(new_dir.Time);
     // write the inode
     WriteBlock(Inode_num, (char*)(&new_dir), sizeof(new_dir), 0, 0);
-    return 0;
+    WriteBlock(Current_Dir + INODE_BLOCK, (char*)&dir, sizeof(dir), 0, 0);
 }
 
 // maybe block num of Inode is more useful
+uint64_t second_block[ENTRY_NUM];
+struct Inode Dir, tmp;
 uint64_t* FindEntry(uint64_t inode_num ,char* entry_name){
-    struct Inode *dir, tmp; 
-    dir = (struct Inode*)(disk + (INODE_BLOCK + inode_num) * BLOCK_SIZE);
-    if(dir->file_type == 0){
-        printf("FAIL: %s is not a dir\n", dir->filename);
-        fprintf(fs_log, "FAIL: %s is not a dir\n", dir->filename);
+    printf("Find Entry\n");
+    // struct Inode dir, tmp; 
+    // struct Inode tmp;
+    // dir = (struct Inode*)(disk + (INODE_BLOCK + inode_num) * BLOCK_SIZE);
+    ReadBlock(inode_num + INODE_BLOCK, (char*)&Dir, sizeof(Dir), 0, 0);
+    if(Dir.file_type == 0){
+        sprintf(output+strlen(output), "FAIL: %s is not a dir\n", Dir.filename);
+        fprintf(fs_log, "FAIL: %s is not a dir\n", Dir.filename);
         return NULL;
     }
     // memcpy(&dir, disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE, sizeof(dir));
     for(int i = 2;i < DIRECT_BLOCK;++i){
-        if(dir->direct[i] == -1)
+        if(Dir.direct[i] == -1)
             continue;
-        memcpy(&tmp, disk + (INODE_BLOCK + dir->direct[i]) * BLOCK_SIZE, sizeof(tmp));
+        ReadBlock(Dir.direct[i] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
+        // memcpy(&tmp, disk + (INODE_BLOCK + dir->direct[i]) * BLOCK_SIZE, sizeof(tmp));
         if(strcmp(tmp.filename, entry_name) == 0)
-            return (&dir->direct[i]);
+            return (&Dir.direct[i]);
+        printf("tmp.filename: %s\n", tmp.filename);
     }
     for(int j = 0;j < SECOND_INDIRECT;++j){
-        if(dir->second_indirect[j] == -1)
+        if(Dir.second_indirect[j] == -1)
             continue;
-        uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + dir->second_indirect[j]) * BLOCK_SIZE);
+        // second_block = (uint64_t*)(disk + (INODE_BLOCK + dir.second_indirect[j]) * BLOCK_SIZE);
+        ReadBlock(Dir.second_indirect[j] + INODE_BLOCK, (char*)&second_block, sizeof(second_block), 0, 0);
         for(int i = 0;i < ENTRY_NUM;++i){
             if(second_block[i] == -1)
                 continue;
-            memcpy(&tmp, disk + (INODE_BLOCK + second_block[i]) * BLOCK_SIZE, sizeof(tmp));
+            ReadBlock(second_block[i] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
+            // memcpy(&tmp, disk + (INODE_BLOCK + second_block[i]) * BLOCK_SIZE, sizeof(tmp));
             if(strcmp(tmp.filename, entry_name) == 0)
                 return (&second_block[i]);
         }
@@ -664,9 +562,10 @@ uint64_t* FindEntry(uint64_t inode_num ,char* entry_name){
     return NULL;
 }
 
+// just return the data block
 int FreeFile(struct Inode* file){
     int block_num = file->block_num;
-    // printf("block_num: %d\n", block_num);
+    // sprintf(output+strlen(output), "block_num: %d\n", block_num);
     for(int i = 0;i < block_num;++i){
         D_ReturnBlock(*GetPhysicalBlockNum(file, i));
     }
@@ -683,21 +582,25 @@ bool EntryExist(char* entry_name){
 int RemoveFile(char **args){
     uint64_t* Inode_num = FindEntry(Current_Dir , args[1]);
     if(Inode_num == NULL){
-        printf("FAIL: No such file!\nDeletion error!\n");
+        sprintf(output+strlen(output), "FAIL: No such file!\nDeletion error!\n");
         fprintf(fs_log, "FAIL: No such file! Deletion error!\n");
         return -1;
     }
     // delete the file from the current dir
     // TODO maybe it is not a good practice, but maybe faster
-    struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE);
-    if(file->file_type == 1){
-        printf("FAIL: %s is not a file\n", file->filename);
-        fprintf(fs_log, "FAIL: %s is not a file\n", file->filename);
+    // struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE);
+    struct Inode file;
+    ReadBlock(*Inode_num + INODE_BLOCK, (char*)&file, sizeof(file), 0, 0);
+    if(file.file_type == 1){
+        sprintf(output+strlen(output), "FAIL: %s is not a file\n", file.filename);
+        fprintf(fs_log, "FAIL: %s is not a file\n", file.filename);
         return -1;
     }
-    FreeFile(file);
+    FreeFile(&file);
     I_ReturnBlock(*Inode_num);
     *Inode_num = -1;
+    // WriteBlock(Current_Dir + INODE_BLOCK, (char*)&Current_Dir, sizeof(Current_Dir), 0, 0);
+    WriteBlock(Current_Dir + INODE_BLOCK, (char*)&Dir, sizeof(Dir), 0, 0);
 }
 
 // TODO 
@@ -708,12 +611,14 @@ int FreeDir(struct Inode* dir){
     for(int i = 2;i < DIRECT_BLOCK;++i){
         if(dir->direct[i] == -1)
             continue;
-        struct Inode* tmp = (struct Inode*)(disk + (INODE_BLOCK + dir->direct[i]) * BLOCK_SIZE);
-        if(tmp->file_type == 1){
-            FreeDir(tmp);
+        // struct Inode* tmp = (struct Inode*)(disk + (INODE_BLOCK + dir->direct[i]) * BLOCK_SIZE);
+        struct Inode tmp;
+        ReadBlock(dir->direct[i] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
+        if(tmp.file_type == 1){
+            FreeDir(&tmp);
         }
         else{
-            FreeFile(tmp);
+            FreeFile(&tmp);
         }
         I_ReturnBlock(dir->direct[i]);
         // I_ReturnBlock(*GetPhysicalBlockNum(dir, i));
@@ -722,16 +627,20 @@ int FreeDir(struct Inode* dir){
         if(dir->second_indirect[j] == -1)
             continue;
         // assert(0);
-        uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + dir->second_indirect[j]) * BLOCK_SIZE);
+        // uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + dir->second_indirect[j]) * BLOCK_SIZE);
+        uint64_t second_block[ENTRY_NUM];
+        ReadBlock(dir->second_indirect[j] + INODE_BLOCK, (char*)second_block, sizeof(second_block), 0, 0);     
         for(int i = 0;i < ENTRY_NUM;++i){
             if(second_block[i] == -1)
                 continue;
-            struct Inode* tmp = (struct Inode*)(disk + (INODE_BLOCK + second_block[i]) * BLOCK_SIZE);
-            if(tmp->file_type == 1){
-                FreeDir(tmp);
+            // struct Inode* tmp = (struct Inode*)(disk + (INODE_BLOCK + second_block[i]) * BLOCK_SIZE);
+            struct Inode tmp;
+            ReadBlock(second_block[i] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
+            if(tmp.file_type == 1){
+                FreeDir(&tmp);
             }
             else{
-                FreeFile(tmp);
+                FreeFile(&tmp);
             }
             I_ReturnBlock(second_block[i]);
         }
@@ -744,24 +653,43 @@ int FreeDir(struct Inode* dir){
 // Dir has to be recursively deleted
 // rmdir d
 int RemoveDir(char **args){
+    if(strcmp(args[1], "/") == 0){
+        sprintf(output+strlen(output), "FAIL: Cannot remove root dir!\n");
+        fprintf(fs_log, "FAIL: Cannot remove root dir!\n");
+        return -1;
+    }
+    if(strcmp(args[1], ".") == 0){
+        sprintf(output+strlen(output), "FAIL: Cannot remove current dir!\n");
+        fprintf(fs_log, "FAIL: Cannot remove current dir!\n");
+        return -1;
+    }
+    if(strcmp(args[1], "..") == 0){
+        sprintf(output+strlen(output), "FAIL: Cannot remove parent dir!\n");
+        fprintf(fs_log, "FAIL: Cannot remove parent dir!\n");
+        return -1;
+    }
     uint64_t* Inode_num = FindEntry(Current_Dir, args[1]);
     if(Inode_num == NULL){
-        printf("FAIL: No such dir!\nDeletion error!\n");
+        sprintf(output+strlen(output), "FAIL: No such dir!\nDeletion error!\n");
         fprintf(fs_log, "FAIL: No such dir! Deletion error!\n");
         return -1;
     }
     // delete the dir from the current dir
     // TODO maybe it is not a good practice
-    struct Inode* dir = (struct Inode*)(disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE);
-    if(dir->file_type == 0){
-        printf("FAIL: %s is not a dir\n", dir->filename);
-        fprintf(fs_log, "FAIL: %s is not a dir\n", dir->filename);
+    // struct Inode* dir = (struct Inode*)(disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE);
+    // declared before find entry function
+    struct Inode dir;
+    ReadBlock(*Inode_num + INODE_BLOCK, (char*)&dir, sizeof(dir), 0, 0);
+    if(dir.file_type == 0){
+        sprintf(output+strlen(output), "FAIL: %s is not a dir\n", dir.filename);
+        fprintf(fs_log, "FAIL: %s is not a dir\n", dir.filename);
         return -1;
     }
-    FreeDir(dir);
+    FreeDir(&dir);
     I_ReturnBlock(*Inode_num);
     *Inode_num = -1;
-    return 0;
+    // WriteBlock(Current_Dir + INODE_BLOCK, (char*)&Current_Dir, sizeof(Current_Dir), 0, 0);
+    WriteBlock(Current_Dir + INODE_BLOCK, (char*)&Dir, sizeof(Dir), 0, 0);
 }
 
 // cd path 
@@ -779,7 +707,6 @@ void ParsePath(char* path, char* dirs[]){
         token = strtok(NULL, "/");
     }
     dirs[i] = NULL;
-    return 0;
 }
 
 int ChangeDir(char **args){
@@ -787,17 +714,19 @@ int ChangeDir(char **args){
     ParsePath(args[1], dirs);
     uint64_t tmp_cur_dir = Current_Dir;
     int cnt = 0;
-    struct Inode cur_dir = *(struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
-    // printf("Current_Dir: %ld, dir-direct[0]: %ld\n", Current_Dir, cur_dir.direct[0]);
+    // struct Inode cur_dir = *(struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
+    struct Inode cur_dir;
+    ReadBlock(Current_Dir + INODE_BLOCK, (char*)&cur_dir, sizeof(cur_dir), 0, 0);
+    // sprintf(output+strlen(output), "Current_Dir: %ld, dir-direct[0]: %ld\n", Current_Dir, cur_dir.direct[0]);
     assert(Current_Dir == cur_dir.direct[0]);
     if(strcmp(dirs[0], "/") == 0){
         tmp_cur_dir = 0;
         cnt++;
     }
     else if(strcmp(dirs[0], "..") == 0){
-        // printf("back to the fa\n");
+        // sprintf(output+strlen(output), "back to the fa\n");
         tmp_cur_dir = cur_dir.direct[1];
-        // printf("tmp_cur_dir: %ld\n", tmp_cur_dir);
+        // sprintf(output+strlen(output), "tmp_cur_dir: %ld\n", tmp_cur_dir);
         cnt++;
     }
     else if(strcmp(dirs[0], ".") == 0){
@@ -805,106 +734,119 @@ int ChangeDir(char **args){
         cnt++;
     }
     else{
-        // printf("working in %ld\n", Current_Dir);
+        // sprintf(output+strlen(output), "working in %ld\n", Current_Dir);
         tmp_cur_dir = Current_Dir;
     }
-    cur_dir = *(struct Inode*)(disk + (INODE_BLOCK + tmp_cur_dir) * BLOCK_SIZE);
+    // cur_dir = *(struct Inode*)(disk + (INODE_BLOCK + tmp_cur_dir) * BLOCK_SIZE);
+    ReadBlock(tmp_cur_dir + INODE_BLOCK, (char*)&cur_dir, sizeof(cur_dir), 0, 0);
     while(dirs[cnt] != NULL){
-        // printf("dirs[%d]: %s\n", cnt, dirs[cnt]);
+        // sprintf(output+strlen(output), "dirs[%d]: %s\n", cnt, dirs[cnt]);
         uint64_t* Inode_num = FindEntry(tmp_cur_dir, dirs[cnt]);
         if(Inode_num == NULL){
-            printf("FAIL: No such dir %s!\n", dirs[cnt]);
+            sprintf(output+strlen(output), "FAIL: No such dir %s!\n", dirs[cnt]);
             fprintf(fs_log, "FAIL: No such dir %s!\n", dirs[cnt]);
             return -1;
         }
-        struct Inode* inode = (struct Inode*)(disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE);
-        if(inode->file_type == 0){
-            printf("FAIL: %s is not a dir!\n", inode->filename);
-            fprintf(fs_log, "FAIL: %s is not a dir!\n", inode->filename);
+        // struct Inode* inode = (struct Inode*)(disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE);
+        struct Inode inode;
+        ReadBlock(*Inode_num + INODE_BLOCK, (char*)&inode, sizeof(inode), 0, 0);
+        if(inode.file_type == 0){
+            sprintf(output+strlen(output), "FAIL: %s is not a dir!\n", inode.filename);
+            fprintf(fs_log, "FAIL: %s is not a dir!\n", inode.filename);
             return -1;
         }
-        // printf("inode . %ld .. %ld\n", inode->direct[0], inode->direct[1]);
+        // sprintf(output+strlen(output), "inode . %ld .. %ld\n", inode->direct[0], inode->direct[1]);
         tmp_cur_dir = *Inode_num;
-        memcpy(&cur_dir, disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE, sizeof(struct Inode));
+        // memcpy(&cur_dir, disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE, sizeof(struct Inode));
+        ReadBlock(*Inode_num + INODE_BLOCK, (char*)&cur_dir, sizeof(cur_dir), 0, 0);
         cnt++;
     }
     Current_Dir = tmp_cur_dir;
-    CurrentDir_Inode = (struct Inode*)(disk +(INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
+    // CurrentDir_Inode = (struct Inode*)(disk +(INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
+    ReadBlock(Current_Dir + INODE_BLOCK, (char*)&CurrentDir_Inode, sizeof(CurrentDir_Inode), 0, 0);
     memcpy(pwd, args[1], strlen(args[1]));
-    cur_dir = *(struct Inode*)(disk + (INODE_BLOCK + tmp_cur_dir) * BLOCK_SIZE);
-    // printf("after Current_Dir: %ld, dir-direct[0]: %ld\n", Current_Dir, cur_dir.direct[0]);
-    return 0;
+    // cur_dir = *(struct Inode*)(disk + (INODE_BLOCK + tmp_cur_dir) * BLOCK_SIZE);
+    // ReadBlock(tmp_cur_dir + INODE_BLOCK, (char*)&cur_dir, sizeof(cur_dir), 0, 0);
+    // sprintf(output+strlen(output), "after Current_Dir: %ld, dir-direct[0]: %ld\n", Current_Dir, cur_dir.direct[0]);
 }
 
 void PrintEntry(struct Inode* inode){
     assert(inode != NULL);
     // TODO we should consider the format using *. to implement it
-    printf("%s\t", inode->filename);
-    printf("%ld\t", inode->file_size);
+    sprintf(output+strlen(output), "%s\t", inode->filename);
+    sprintf(output+strlen(output), "%ld\t", inode->file_size);
     if(inode->file_type == 0)
-        printf("%s\t", "F");
+        sprintf(output+strlen(output), "%s\t", "F");
     else 
-        printf("%s\t", "D");
-    printf("%s\t", inode->Time);
-    printf("\n");
+        sprintf(output+strlen(output), "%s\t", "D");
+    sprintf(output+strlen(output), "%s\t", inode->Time);
+    sprintf(output+strlen(output), "\n");
 }
 
 int PrintCurDir(char **args){
-    printf("Current dir: %ld\n", Current_Dir);
-    struct Inode* inode = (struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
-    printf("%s\n", inode->filename);
-    // printf("inode . %ld .. %ld\n", inode->direct[0], inode->direct[1]);
-    PrintEntry(inode);
+    sprintf(output+strlen(output), "Current dir: %ld\n", Current_Dir);
+    // struct Inode* inode = (struct Inode*)(disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE);
+    struct Inode inode;
+    ReadBlock(Current_Dir + INODE_BLOCK, (char*)&inode, sizeof(inode), 0, 0);
+    sprintf(output+strlen(output), "%s\n", inode.filename);
+    // sprintf(output+strlen(output), "inode . %ld .. %ld\n", inode->direct[0], inode->direct[1]);
+    PrintEntry(&inode);
 }
 
 // ls
 // for dir inode , we cannot use the block_num, we must use -1 to manage the invalid inode entry
 int List(char **args){
-    // printf("List called\n");
+    // sprintf(output+strlen(output), "List called\n");
     struct Inode dir, tmp; 
-    memcpy(&dir, disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE, sizeof(dir));
+    // memcpy(&dir, disk + (INODE_BLOCK + Current_Dir) * BLOCK_SIZE, sizeof(dir));
+    ReadBlock(Current_Dir + INODE_BLOCK, (char*)&dir, sizeof(dir), 0, 0);
     if(dir.file_type == 0){
-        printf("FAIL: Not a dir!\n");
-        printf("FAIL: Not a dir!\n");
+        sprintf(output+strlen(output), "FAIL: Not a dir!\n");
+        sprintf(output+strlen(output), "FAIL: Not a dir!\n");
         // ERROR!!!
         assert(0);
         return -1;
     }
-    // printf(".:%ld\t..:%ld\n", dir.direct[0], dir.direct[1]);
-    // printf("%s\n", dir.filename);
-
+    // sprintf(output+strlen(output), ".:%ld\t..:%ld\n", dir.direct[0], dir.direct[1]);
+    // sprintf(output+strlen(output), "%s\n", dir.filename);
     assert(dir.direct[0] != -1 && dir.direct[1] != -1);
-    memcpy(&tmp, disk + (INODE_BLOCK + dir.direct[0]) * BLOCK_SIZE, sizeof(tmp));
-    printf(".\t");
-    printf("%ld\t", tmp.file_size);
-    printf("%s\t", "D");
-    printf("%s\t", tmp.Time);
-    printf("\n");
+    // memcpy(&tmp, disk + (INODE_BLOCK + dir.direct[0]) * BLOCK_SIZE, sizeof(tmp));
+    ReadBlock(dir.direct[0] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
+    sprintf(output+strlen(output), ".\t");
+    sprintf(output+strlen(output), "%ld\t", tmp.file_size);
+    sprintf(output+strlen(output), "%s\t", "D");
+    sprintf(output+strlen(output), "%s\t", tmp.Time);
+    sprintf(output+strlen(output), "\n");
 
-    memcpy(&tmp, disk + (INODE_BLOCK + dir.direct[1]) * BLOCK_SIZE, sizeof(tmp));
-    printf("..\t");
-    printf("%ld\t", tmp.file_size);
-    printf("%s\t", "D");
-    printf("%s\t", tmp.Time);
-    printf("\n");
+    // memcpy(&tmp, disk + (INODE_BLOCK + dir.direct[1]) * BLOCK_SIZE, sizeof(tmp));
+    ReadBlock(dir.direct[1] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
+    sprintf(output+strlen(output), "..\t");
+    sprintf(output+strlen(output), "%ld\t", tmp.file_size);
+    sprintf(output+strlen(output), "%s\t", "D");
+    sprintf(output+strlen(output), "%s\t", tmp.Time);
+    sprintf(output+strlen(output), "\n");
 
     for(int i = 2;i < DIRECT;++i){
         if(dir.direct[i] == -1)
             continue;
-        // printf("%d\n%ld\t%ld\n", i, dir.direct[i], (INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE);
+        // sprintf(output+strlen(output), "%d\n%ld\t%ld\n", i, dir.direct[i], (INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE);
         assert((INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE <= DISK_SIZE);
-        memcpy(&tmp, disk + (INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE, sizeof(tmp));
+        // memcpy(&tmp, disk + (INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE, sizeof(tmp));
+        ReadBlock(dir.direct[i] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
         PrintEntry(&tmp);
     }
     for(int i = 0;i < SECOND_INDIRECT_BLOCK;++i){
         if(dir.second_indirect[i / ENTRY_NUM] == -1)
             continue;
-        // printf("%d\n", i);
+        // sprintf(output+strlen(output), "%d\n", i);
         assert((INODE_BLOCK + dir.second_indirect[i / ENTRY_NUM]) * BLOCK_SIZE < DISK_SIZE);
-        uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + dir.second_indirect[i / ENTRY_NUM] * BLOCK_SIZE));
+        // uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + dir.second_indirect[i / ENTRY_NUM] * BLOCK_SIZE));
+        uint64_t second_block[ENTRY_NUM];
+        ReadBlock(dir.second_indirect[i / ENTRY_NUM] + INODE_BLOCK, (char*)second_block, sizeof(second_block), 0, 0);
         if(second_block[i % ENTRY_NUM] == -1)
             continue;
-        memcpy(&tmp, disk + (second_block[i % ENTRY_NUM] + INODE_BLOCK) * BLOCK_SIZE, sizeof(tmp));
+        // memcpy(&tmp, disk + (second_block[i % ENTRY_NUM] + INODE_BLOCK) * BLOCK_SIZE, sizeof(tmp));
+        ReadBlock(second_block[i % ENTRY_NUM] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
         PrintEntry(&tmp);
     }
     return 0;
@@ -912,51 +854,55 @@ int List(char **args){
 
 // cat f 
 int Cat(char **args){
-    // printf("Look file: %s\n", args[1]);
+    // sprintf(output+strlen(output), "Look file: %s\n", args[1]);
     uint64_t* Inode_num = FindEntry(Current_Dir, args[1]);
-    // printf("Find Over\n");
+    // sprintf(output+strlen(output), "Find Over\n");
     if(Inode_num == NULL){
-        printf("FAIL: No such file! %s\nCat error\n", args[1]);
+        sprintf(output+strlen(output), "FAIL: No such file! %s\nCat error\n", args[1]);
         fprintf(fs_log, "FAIL: No such file %s! Cat error\n", args[1]);
         return -1;
     }
     struct Inode file;
-    memcpy(&file, disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE, sizeof(file));
+    // memcpy(&file, disk + (INODE_BLOCK + *Inode_num) * BLOCK_SIZE, sizeof(file));
+    ReadBlock(*Inode_num + INODE_BLOCK, (char*)&file, sizeof(file), 0, 0);
     if(file.file_type == 1){
-        printf("FAIL: %s is a dir!\nCat error\n", args[1]);
+        sprintf(output+strlen(output), "FAIL: %s is a dir!\nCat error\n", args[1]);
         fprintf(fs_log, "FAIL: %s is a dir! Cat error\n", args[1]);
         return -1;
     }
     char* content = (char*)malloc(file.file_size + 1);
     memset(content, 0, file.file_size + 1);
     int sz = file.file_size, offset = 0;
-    // printf("block num: %ld\n", file.block_num);
+    // sprintf(output+strlen(output), "block num: %ld\n", file.block_num);
     assert(file.file_size / BLOCK_SIZE + (file.file_size % BLOCK_SIZE != 0) == file.block_num);
     for(int i = 0;i < DIRECT_BLOCK && sz > 0;++i){
         int len = MIN(sz, BLOCK_SIZE);
-        memcpy(content + offset, disk + (file.direct[i]) * BLOCK_SIZE, len);
+        // memcpy(content + offset, disk + (file.direct[i]) * BLOCK_SIZE, len);
+        ReadBlock(file.direct[i], content + offset, len, 0, 0);
         sz -= BLOCK_SIZE;
         offset += BLOCK_SIZE;
     }
     for(int i = 0;i < SECOND_INDIRECT_BLOCK && sz > 0;++i){
-        uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + file.second_indirect[i]) * BLOCK_SIZE);
+        // uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + file.second_indirect[i]) * BLOCK_SIZE);
+        uint64_t second_block[ENTRY_NUM];
+        ReadBlock(file.second_indirect[i] + INODE_BLOCK, (char*)second_block, sizeof(second_block), 0, 0);
         for(int j = 0;j < ENTRY_NUM;++j){
             int len = MIN(sz, BLOCK_SIZE);
-            memcpy(content + offset, disk + (second_block[j]) * BLOCK_SIZE, len);
+            // memcpy(content + offset, disk + (second_block[j]) * BLOCK_SIZE, len);
+            ReadBlock(second_block[j], content + offset, len, 0, 0);
             sz -= BLOCK_SIZE;
             offset += BLOCK_SIZE;
         }
     }
-    printf("%s\n", content);
+    sprintf(output+strlen(output), "%s\n", content);
     free(content);
-    return 0;
 }
 
 int WriteAux(struct Inode* file, char* data, int len){
-    printf("write aux: %s\n", data);
+    sprintf(output+strlen(output), "write aux: %s\n", data);
     int sz = len;
     if(len < 0){
-        printf("FAIL: Invalid length!\nWrite error!\n");
+        sprintf(output+strlen(output), "FAIL: Invalid length!\nWrite error!\n");
         fprintf(fs_log, "FAIL: Invalid length! Write error!\n");
         return -1;
     }
@@ -964,14 +910,15 @@ int WriteAux(struct Inode* file, char* data, int len){
     for(int i = 0;i < block_num && len > 0;++i){
         uint64_t* block = GetPhysicalBlockNum(file, i);
         *block = D_GetFreeBlock();
-        // printf("block: %ld\n", *block);
+        // sprintf(output+strlen(output), "block: %ld\n", *block);
         if(*block == -1){
-            printf("FAIL: No enough space!\nWrite error!\n");
+            sprintf(output+strlen(output), "FAIL: No enough space!\nWrite error!\n");
             fprintf(fs_log, "FAIL: No enough space! Write error!\n");
             return -1;
         }
         // file.direct[i] = block;
-        memcpy(disk + (*block) * BLOCK_SIZE, data + i * BLOCK_SIZE, MIN(BLOCK_SIZE, len));
+        // memcpy(disk + (*block) * BLOCK_SIZE, data + i * BLOCK_SIZE, MIN(BLOCK_SIZE, len));
+        WriteBlock(*block, data + i * BLOCK_SIZE, MIN(BLOCK_SIZE, len), 0, 0);
         file->block_num++;
         len -= BLOCK_SIZE;
     }
@@ -980,32 +927,34 @@ int WriteAux(struct Inode* file, char* data, int len){
 
 // w f l data  
 int Write(char **args){
-    // printf("Write called\n");
+    // sprintf(output+strlen(output), "Write called\n");
     char* file_name = args[1];
     uint64_t* inode_block = FindEntry(Current_Dir, file_name);
     if(inode_block == NULL){
-        printf("FAIL: No such file!\nWrite error!\n");
+        sprintf(output+strlen(output), "FAIL: No such file!\nWrite error!\n");
         fprintf(fs_log, "FAIL: No such file! Write error!\n");
         return -1;
     }
     if(atoi(args[2]) < 0){
-        printf("FAIL: Invalid length!\nWrite error!\n");
+        sprintf(output+strlen(output), "FAIL: Invalid length!\nWrite error!\n");
         fprintf(fs_log, "FAIL: Invalid length! Write error!\n");
         return -1;
     }
-    struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *inode_block) * BLOCK_SIZE);
-    if(file->file_type == 1){
-        printf("FAIL: Not a file!\nWrite error!\n");
+    // struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *inode_block) * BLOCK_SIZE);
+    struct Inode file;
+    ReadBlock(*inode_block + INODE_BLOCK, (char*)&file, sizeof(file), 0, 0);
+    if(file.file_type == 1){
+        sprintf(output+strlen(output), "FAIL: Not a file!\nWrite error!\n");
         fprintf(fs_log, "FAIL: Not a file! Write error!\n");
         return -1;
     }
-    FreeFile(file);
+    FreeFile(&file);
     int len = MIN(strlen(args[3]), atoi(args[2]));
-    WriteAux(file, args[3], len);
-    file->block_num = len / BLOCK_SIZE + (len % BLOCK_SIZE != 0);
-    file->file_size = len;
-    // printf("write to block %ld\n", file->direct[0]);
-    return 0;
+    WriteAux(&file, args[3], len);
+    file.block_num = len / BLOCK_SIZE + (len % BLOCK_SIZE != 0);
+    file.file_size = len;
+    // sprintf(output+strlen(output), "write to block %ld\n", file->direct[0]);
+    WriteBlock(*inode_block + INODE_BLOCK, (char*)&file, sizeof(file), 0, 0);
 }
 
 // i f pos l data 
@@ -1016,65 +965,78 @@ int Insert(char **args){
     uint64_t pos = atoi(args[2]);
     uint64_t* inode_block = FindEntry(Current_Dir, args[1]);
     if(inode_block == NULL){
-        printf("FAIL: No such file!\nInsert error!\n");
+        sprintf(output+strlen(output), "FAIL: No such file!\nInsert error!\n");
         fprintf(fs_log, "FAIL: No such file! Insert error!\n");   
         return -1;
     }
     if(pos < 0){
-        printf("FAIL: Invalid position!\nInsert error!\n");
+        sprintf(output+strlen(output), "FAIL: Invalid position!\nInsert error!\n");
         fprintf(fs_log, "FAIL: Invalid position! Insert error!\n");
         return -1;
     }
     if(atoi(args[3]) < 0){
-        printf("FAIL: Invalid length!\nInsert error!\n");
+        sprintf(output+strlen(output), "FAIL: Invalid length!\nInsert error!\n");
         fprintf(fs_log, "FAIL: Invalid length! Insert error!\n");
         return -1;                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                       
     }
-    struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *inode_block) * BLOCK_SIZE);
-    if(file->file_type == 1){
-        printf("FAIL: %s is a dir!\nInsert error!\n", args[1]);
+    // struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *inode_block) * BLOCK_SIZE);
+    struct Inode file;
+    ReadBlock(*inode_block + INODE_BLOCK, (char*)&file, sizeof(file), 0, 0);
+    if(file.file_type == 1){
+        sprintf(output+strlen(output), "FAIL: %s is a dir!\nInsert error!\n", args[1]);
         fprintf(fs_log, "FAIL: %s is a dir! Insert error!\n", args[1]);
     }
     int len = MIN(strlen(args[4]), atoi(args[3]));
-    char* content = (char*)malloc(file->file_size + len + 1);
-    memset(content, 0, file->file_size + len);
+    char* content = (char*)malloc(file.file_size + len + 1);
+    memset(content, 0, file.file_size + len);
     int data_before_blk_num = pos / BLOCK_SIZE;
-    // printf("data_before_blk_num: %d\n", data_before_blk_num);
+    // sprintf(output+strlen(output), "data_before_blk_num: %d\n", data_before_blk_num);
     // int data_before_blk_num = atoi(args[2]) / BLOCK_SIZE + (atoi(args[2]) % BLOCK_SIZE != 0);
-    // printf("physical block num: %d\n", *GetPhysicalBlockNum(file, data_before_blk_num));
+    // sprintf(output+strlen(output), "physical block num: %d\n", *GetPhysicalBlockNum(file, data_before_blk_num));
     for(int i = 0;i < data_before_blk_num;++i){
-        // printf("physical block num: %ld\n", *GetPhysicalBlockNum(file, i));
-        memcpy(content + i * BLOCK_SIZE, disk + (*GetPhysicalBlockNum(file, i)) * BLOCK_SIZE, BLOCK_SIZE);
+        // sprintf(output+strlen(output), "physical block num: %ld\n", *GetPhysicalBlockNum(file, i));
+        // memcpy(content + i * BLOCK_SIZE, disk + (*GetPhysicalBlockNum(file, i)) * BLOCK_SIZE, BLOCK_SIZE);
+        ReadBlock(*GetPhysicalBlockNum(&file, i), content + i * BLOCK_SIZE, BLOCK_SIZE, 0, 0);
     }
     int offset = data_before_blk_num * BLOCK_SIZE;  
-    // printf("%d\n", offset);
-    // printf("physical block num: %ld\n", *GetPhysicalBlockNum(file, 0));
-    memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, data_before_blk_num) * BLOCK_SIZE), pos % BLOCK_SIZE);
-    // printf("%s\n", content);
+    // sprintf(output+strlen(output), "%d\n", offset);
+    // sprintf(output+strlen(output), "physical block num: %ld\n", *GetPhysicalBlockNum(file, 0));
+    // memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, data_before_blk_num) * BLOCK_SIZE), pos % BLOCK_SIZE);
+    ReadBlock(*GetPhysicalBlockNum(&file, data_before_blk_num), content + offset, pos % BLOCK_SIZE, 0, 0);
+    // sprintf(output+strlen(output), "%s\n", content);
+    printf("offset: %d\tcontent1: %s\n", offset, content);
     offset += pos % BLOCK_SIZE;
-    // printf("%d\n", offset);
+    // sprintf(output+strlen(output), "%d\n", offset);
     memcpy(content + offset, args[4], len);
+    printf("offset: %d\tcontent2: %s\n", offset, content);
     offset += len;
-    // printf("%d\n", offset);
-    // printf("%s\n", content);
-    int trunc_sz = MIN(file->file_size - data_before_blk_num * BLOCK_SIZE, BLOCK_SIZE);
+    // sprintf(output+strlen(output), "%d\n", offset);
+    // sprintf(output+strlen(output), "%s\n", content);
+    int trunc_sz = MIN(file.file_size - data_before_blk_num * BLOCK_SIZE, BLOCK_SIZE);
     int copy_sz = trunc_sz - pos % BLOCK_SIZE;
-    if(pos % BLOCK_SIZE != 0)
-        memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, data_before_blk_num)) * BLOCK_SIZE + pos, copy_sz);
-    // printf("%s\n", content);  
+    // if(pos % BLOCK_SIZE != 0)
+    if(copy_sz && pos < BLOCK_SIZE)
+        // memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, data_before_blk_num)) * BLOCK_SIZE + pos, copy_sz);
+        ReadBlock(*GetPhysicalBlockNum(&file, data_before_blk_num), content + offset, copy_sz, pos % BLOCK_SIZE, 0);
+    // sprintf(output+strlen(output), "%s\n", content);  
+    printf("offset: %d\tcontent3: %s\n", offset, content);
     offset += BLOCK_SIZE - pos % BLOCK_SIZE;
-    for(int i = data_before_blk_num + 1;i < file->block_num;++i){
-        memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, i)) * BLOCK_SIZE, BLOCK_SIZE);
+    for(int i = data_before_blk_num + 1;i < file.block_num;++i){
+        // memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, i)) * BLOCK_SIZE, BLOCK_SIZE);
+        ReadBlock(*GetPhysicalBlockNum(&file, i), content + offset, BLOCK_SIZE, 0, 0);
         offset += BLOCK_SIZE;
     }
-    // printf("%s\n", content);
-    content[file->file_size + len] = '\0';
-    int tmp_sz = file->file_size;
-    FreeFile(file);
-    WriteAux(file, content, tmp_sz + len);
-    // printf("write to block %ld\n", file->direct[0]);
+    // sprintf(output+strlen(output), "%s\n", content);
+    content[file.file_size + len] = '\0';
+    int tmp_sz = file.file_size;
+    FreeFile(&file);
+    WriteAux(&file, content, tmp_sz + len);
+    // sprintf(output+strlen(output), "write to block %ld\n", file->direct[0]);
+    printf("content: %s\n", content);
+    printf("file size: %d\n", file.file_size);
+    printf("content: %s\n", content + strlen(content));
     free(content);
-    return 0;
+    WriteBlock(*inode_block + INODE_BLOCK, (char*)&file, sizeof(file), 0, 0);
 }
 
 // d f pos l 
@@ -1083,58 +1045,69 @@ int Delete(char **args){
     uint64_t pos = atoi(args[2]);
     uint64_t* inode_block = FindEntry(Current_Dir, args[1]);
     if(inode_block == NULL){
-        printf("FAIL: No such file %s!\nDelete error!\n", args[1]);
+        sprintf(output+strlen(output), "FAIL: No such file %s!\nDelete error!\n", args[1]);
         fprintf(fs_log, "FAIL: No such file %s! Delete error!\n", args[1]);
         return -1;
     }
-    struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *inode_block) * BLOCK_SIZE);
-    if(file->file_type == 1){
-        printf("FAIL: Not a file!\nDelete error!\n");
+    // struct Inode* file = (struct Inode*)(disk + (INODE_BLOCK + *inode_block) * BLOCK_SIZE);
+    struct Inode file;
+    ReadBlock(INODE_BLOCK + *inode_block, &file, sizeof(struct Inode), 0, 0);
+    if(file.file_type == 1){
+        sprintf(output+strlen(output), "FAIL: Not a file!\nDelete error!\n");
         fprintf(fs_log, "FAIL: Not a file! Delete error!\n");
         return -1;
     }
-    int len = MIN(file->file_size - pos, atoi(args[3]));
-    assert(file->file_size >= len);
-    char* content = (char*)malloc(file->file_size - len  + 1);
+    int len = MIN(file.file_size - pos, atoi(args[3]));
+    assert(file.file_size >= len);
+    char* content = (char*)malloc(file.file_size - len  + 1);
     int data_before_blk_num = pos / BLOCK_SIZE;
     for(int i = 0;i < data_before_blk_num;++i){
-        memcpy(content + i * BLOCK_SIZE, disk + (*GetPhysicalBlockNum(file, i)) * BLOCK_SIZE, BLOCK_SIZE);
+        // memcpy(content + i * BLOCK_SIZE, disk + (*GetPhysicalBlockNum(file, i)) * BLOCK_SIZE, BLOCK_SIZE);
+        ReadBlock(*GetPhysicalBlockNum(&file, i), content + i * BLOCK_SIZE, BLOCK_SIZE, 0, 0);
     }
     int offset = data_before_blk_num * BLOCK_SIZE;
     // offset += len;
     // data_before_blk_num = (atoi(args[2]) + len) / BLOCK_SIZE + ((atoi(args[2]) + len) % BLOCK_SIZE != 0);
-    memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, data_before_blk_num)) * BLOCK_SIZE, pos % BLOCK_SIZE);
+    // memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, data_before_blk_num)) * BLOCK_SIZE, pos % BLOCK_SIZE);
+    ReadBlock(*GetPhysicalBlockNum(&file, data_before_blk_num), content + offset, pos % BLOCK_SIZE, 0, 0);
     offset += pos % BLOCK_SIZE;
-    int trunc_sz = MIN(file->file_size - data_before_blk_num * BLOCK_SIZE, BLOCK_SIZE);
+    int trunc_sz = MIN(file.file_size - data_before_blk_num * BLOCK_SIZE, BLOCK_SIZE);
     // memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, data_before_blk_num - (atoi(args[2]) % BLOCK_SIZE != 0))) * BLOCK_SIZE, BLOCK_SIZE - atoi(args[2]) % BLOCK_SIZE);
     // offset += BLOCK_SIZE - atoi(args[2]) % BLOCK_SIZE;
     if(pos % BLOCK_SIZE + len < BLOCK_SIZE)
-        memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, data_before_blk_num)) * BLOCK_SIZE + pos % BLOCK_SIZE + len, trunc_sz - pos % BLOCK_SIZE - len);
-    for(int i = data_before_blk_num + 1;i < file->block_num;++i){
-        memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, i)) * BLOCK_SIZE, BLOCK_SIZE);
+        // memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, data_before_blk_num)) * BLOCK_SIZE + pos % BLOCK_SIZE + len, trunc_sz - pos % BLOCK_SIZE - len);
+        ReadBlock(*GetPhysicalBlockNum(&file, data_before_blk_num), content + offset, trunc_sz - pos % BLOCK_SIZE - len, pos % BLOCK_SIZE + len, 0);
+    for(int i = data_before_blk_num + 1;i < file.block_num;++i){
+        // memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, i)) * BLOCK_SIZE, BLOCK_SIZE);
+        ReadBlock(*GetPhysicalBlockNum(&file, i), content + offset, BLOCK_SIZE, 0, 0);
         offset += BLOCK_SIZE;
     }
-    // printf("%s\n", content);
-    content[file->file_size - len] = '\0';
-    int tmp_sz = file->file_size;
-    FreeFile(file);
-    WriteAux(file, content, tmp_sz - len);
+    // sprintf(output+strlen(output), "%s\n", content);
+    content[file.file_size - len] = '\0';
+    int tmp_sz = file.file_size;
+    FreeFile(&file);
+    WriteAux(&file, content, tmp_sz - len);
     free(content);
-    // printf("Delete success!\n");
-    return 0;
+    // sprintf(output+strlen(output), "Delete success!\n");
+    WriteBlock(*inode_block + INODE_BLOCK, (char*)&file, sizeof(file), 0, 0);
 }
 
 // exit 
 int Exit(char **args){
     ReturnBlock();
-    printf("Goodbye\n");
+    sprintf(output+strlen(output), "Goodbye\n");
     fprintf(fs_log, "Goodbye\n");
-    free(disk);
+    send(client_fd, output, strlen(output), 0);
+    // free(disk);
+    // disk = NULL;
     fclose(fs_log);
+    fs_log = NULL;
+    close(client_fd);
+    close(socket_fd);
     exit(0);
 }
 
-int PrintHelp(char** args);
+int PrintHelp(char**);
 
 // for all cmds
 static struct {
@@ -1164,69 +1137,147 @@ static struct {
 int PrintHelp(char** args){
     #define CMD_NUM sizeof(cmd_table) / sizeof(cmd_table[0])
     for(int i = 0;i < CMD_NUM;++i){
-        printf("%s: %s", cmd_table[i].cmd_name, cmd_table[i].cmd_usage);
+        sprintf(output+strlen(output), "%s: %s", cmd_table[i].cmd_name, cmd_table[i].cmd_usage);
     }
 }
 
 void FileSystem(){
+    printf("enter the fs\n");
     char cmd[CMD_MAX_LEN];
     char* args[5];
     int sz = sizeof(cmd_table) / sizeof(cmd_table[0]);
-    fs_log = fopen("fs.log", "w+");
-    setbuf(fs_log, NULL);
 
+    int res;
+
+    fs_log = fopen("fs.log", "w");
     if(fs_log == NULL){
         printf("Open fs.log error!\n");
         exit(0);
     }
+
+    setbuf(fs_log, NULL);
+
     fprintf(fs_log, "Welcome to the file system!\n");
     fprintf(fs_log, "disk size: %d\n", DISK_SIZE);
     Format(NULL);
+
     while(1){
-        // printf("$");
-        printf("\033[34m%s\033[0m \033[32m$\033[0m ", CurrentDir_Inode->filename);
-        // printf("\033[34m%s\033[0m \033[32m$\033[0m ", pwd);
+        client_fd = accept(socket_fd, (struct sockaddr*)&client_addr, &client_len);
+        printf("one connected\n");
+        if(client_fd < 0){
+            printf("Accept error!\n");
+            exit(0);
+        }
+
+        if(fork() == 0){
+
+    while(1){
+        // sprintf(output+strlen(output), "$");
+        memset(output, 0, sizeof(output));
+        // printf("\033[34m%s\033[0m \033[32m$\033[0m ", CurrentDir_Inode->filename);
+        sprintf(output, "\033[34m%s\033[0m \033[32m$\033[0m ", CurrentDir_Inode.filename);
+        // sprintf(output, "\033[34m%s\033[0m \033[32m$\033[0m ", pwd);
         // scanf("%s", cmd);
-        fgets(cmd, CMD_MAX_LEN, stdin);
+        send(client_fd, output, strlen(output), 0);
+        output[0] = '\0';
+        memset(cmd, 0, sizeof(cmd));
+        recv(client_fd, cmd, CMD_MAX_LEN, 0);
 
         fprintf(fs_log, "\033[34m%s\033[0m", cmd);
-
+        // printf("get here\n");
+        // fgets(cmd, CMD_MAX_LEN, stdin);
         cmd[strcspn(cmd, "\r\n")] = '\0';
-        int argc = Get_Args(cmd, args);
-        // printf("argc: %d\tcmd: %s\n", argc, cmd);
+        int argc = Get_Args(cmd ,args);
+        // sprintf(output+strlen(output), "argc: %d\tcmd: %s\n", argc, cmd);
         int i;
-        int res;
         for(i = 0;i < sz;++i){
             if(strcmp(args[0], cmd_table[i].cmd_name) == 0){
                 if(cmd_table[i].handler != NULL){
                     if(argc != cmd_table[i].argc){
-                        printf("%s\n", error_message[i]);
+                        sprintf(output+strlen(output), "%s\n", error_message[i]);
                         break;
                     }
                     res = cmd_table[i].handler(args);
                     if(res == -1){
-                        printf("\033[31mNO\033[0m\n");
-                    } 
+                        sprintf(output+strlen(output), "\033[31mNO\033[0m\n");
+                    }
                     else{
-                        printf("\033[32mYES\033[0m\n");
+                        sprintf(output+strlen(output), "\033[32mYES\033[0m\n");
                     }
                 }
+                // assert(strlen(output+strlen(output)) > 0);
+                // printf("%s", output);
                 break;
             }
         }
         if(i == sz)
-            printf("FAIL: No such command!\n");
+            sprintf(output+strlen(output), "FAIL: No such command!\n");
+        send(client_fd, output, strlen(output), 0);
+        fprintf(fs_log, "%s", output);
+    }
+    }
+    close(client_fd);
     }
 }
 
+__attribute__((destructor)) void CleanUp(){
+    // if(disk != NULL)
+        // free(disk);
+    if(fs_log != NULL)
+        fclose(fs_log);
+}
+
 int main(int argc, char* argv[]) {
+    if(argc != 3){
+        printf("Usage: ./fs <DiskPort> <FSPort>\n");
+        exit(0);
+    }
+
+    socket_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if(socket_fd < 0){
+        printf("Create server socket error!\n");
+        exit(0);
+    }
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(atoi(argv[2]));
+    
+    if(bind(socket_fd, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
+        printf("Bind error!\n");
+        exit(0);
+    }
+
+    if(listen(socket_fd, 10) < 0){
+        printf("Listen error!\n");
+        exit(0);
+    }
+
+    fs_fd= socket(AF_INET, SOCK_STREAM, 0);
+    memset(&disk_addr, 0, sizeof(disk_addr)); // 初始化服务器地址为零
+    disk_addr.sin_family = AF_INET;
+    disk_addr.sin_port = htons(atoi(argv[1]));
+    if(connect(fs_fd, (struct sockaddr*)&disk_addr, sizeof(disk_addr)) == -1){
+        printf("Connect error!\n");
+        exit(0);
+    }
+
+    client_len = sizeof(client_addr);
+
     setbuf(stdout, NULL);
-    // printf("%ld\n", sizeof(struct Inode));
+    // sprintf(output, "%ld\n", sizeof(struct Inode));
+    sprintf(output, "Welcome to the file system!\n");
     printf("Welcome to the file system!\n");
     assert(sizeof(struct Inode) == BLOCK_SIZE);
+
+    printf("offset:\ntime: %ld", CurrentDir_Inode.Time - (char*)&CurrentDir_Inode);
+
     printf("disk size: %d\n", DISK_SIZE);
+    sprintf(output, "disk size: %d\n", DISK_SIZE);
     FileSystem();
-    free(disk);
+    // free(disk);
+    // disk = NULL;
     fclose(fs_log);
+    fs_log = NULL;
+    close(socket_fd);
     return 0;
 }

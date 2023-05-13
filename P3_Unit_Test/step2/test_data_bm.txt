@@ -1,0 +1,7 @@
+mk file1
+ls
+w file1 10 hellojieli
+ls
+rm file1
+ls
+e

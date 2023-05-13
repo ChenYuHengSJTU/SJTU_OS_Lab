@@ -1,0 +1,75 @@
+ls
+mk f1
+mk f2
+mk f3
+mk f4
+mk f5
+mk f6
+mk f7
+mk f8
+mk f9
+mk f10
+mk f11
+mk f12
+mk f13
+ls
+mk f14
+ls
+mk f15
+mk f16
+mk f17
+mk f18
+mk f19
+mk f20
+mk f21
+mk f22
+mk f23
+mk f24
+mk f25
+mk f26
+mk f27
+mk f28
+mk f29
+mk f30
+mk f31
+mk f32
+mkdir dir1
+ls
+cd dir1
+ls
+mk f1
+mk f2
+mk f3
+mk f4
+mk f5
+mk f6
+mk f7
+mk f8
+mk f9
+mk f10
+mk f11
+mk f12
+mk f13
+mk f14
+mk f15
+mk f16
+mk f17
+mk f18
+mk f19
+mk f20
+mk f21
+mk f22
+mk f23
+mk f24
+mk f25
+mk f26
+mk f27
+mk f28
+mk f29
+mk f30
+mk f31
+mk f32
+ls
+cd ..
+rmdir dir1
+e
