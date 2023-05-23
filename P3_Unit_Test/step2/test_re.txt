@@ -1,0 +1,16 @@
+mk file1
+ls
+w file1 10 hellojieli
+cat file1
+ls
+i file1 5 5 afool
+ls
+cat file1
+d file1 5 5
+ls
+cat file1
+mk file2
+w file2 11 hello jieli
+cat file2
+ls
+e

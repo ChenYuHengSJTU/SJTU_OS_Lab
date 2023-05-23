@@ -1,0 +1,11 @@
+mkdir dir1
+cd dir1
+mkdir 1dir
+cd 1dir
+mkdir di1r
+cd di1r
+cd ..
+cd .
+ls
+cd /
+e

@@ -1,20 +1,50 @@
 Welcome to the file system!
 disk size: 2560000
 Format: Start to format the disk
-InitBlock: Init the blocks
-InitBlock: Init the blocks successfully
-Allocate free inode block: 0
+[32m[1mAllocate free inode block: 0[0m
 Format: Finish formatting the disk
-[32mDone[0m
-[34mmk file1
-[0mAllocate free inode block: 1
+[32mFormat Done![0m
 [34mls
-[0m[34mw file1 10 hellojieli
-[0mAllocate free inode block: 0
+[0m[34mmk file1
+[0m[32m[1mAllocate free inode block: 1[0m
+[34mw file1 1000 Alan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. During World War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. Sadly, Turing was persecuted for being gay and convicted of homosexuality in 1952. He died of apparent suicide two years later. It was only in 2009 that British Prime Minister Gordon Brown issued a public apology on behalf of the British government for the way Turing was treated.
+[0m[32m[1mAllocate free data block: 3333[0m
+[32m[1mAllocate free data block: 3334[0m
+[32m[1mAllocate free data block: 3335[0m
+[32m[1mAllocate free data block: 3336[0m
 [34mls
-[0m[34mrm file1
+[0m[34mcat file1
+[0mAlan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. During World War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. Sadly, Turing was persecuted for being gay and convicted of homosexuality in 1952. He died of apparent suicide two years later. It was only in 2009 that British Prime Minister Gordon Brown issued a public apology on behalf of the British government for the way Turing was treated.
+[34mmkdir dir
+[0m[32m[1mAllocate free inode block: 2[0m
+[34mcd dir
+[0m[34mmkdir tmp
+[0m[32m[1mAllocate free inode block: 3[0m
+[34mcd tmp
+[0m[34mcd /dir
+[0m[34mls
+[0m[34mmk file1
+[0m[32m[1mAllocate free inode block: 4[0m
+[34mw file1 1000 Alan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. During World War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. Sadly, Turing was persecuted for being gay and convicted of homosexuality in 1952. He died of apparent suicide two years later. It was only in 2009 that British Prime Minister Gordon Brown issued a public apology on behalf of the British government for the way Turing was treated.
+[0m[32m[1mAllocate free data block: 3337[0m
+[32m[1mAllocate free data block: 3338[0m
+[32m[1mAllocate free data block: 3339[0m
+[32m[1mAllocate free data block: 3340[0m
+[34mi file1 500 1000 Alan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. During World War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. Sadly, Turing was persecuted for being gay and convicted of homosexuality in 1952. He died of apparent suicide two years later. It was only in 2009 that British Prime Minister Gordon Brown issued a public apology on behalf of the British government for the way Turing was treated.
+[0m[32m[1mAllocate free data block: 3337[0m
+[32m[1mAllocate free data block: 3338[0m
+[32m[1mAllocate free data block: 3339[0m
+[32m[1mAllocate free data block: 3340[0m
+[32m[1mAllocate free data block: 3341[0m
+[32m[1mAllocate free data block: 3342[0m
+[32m[1mAllocate free data block: 3343[0m
+[34mls
+[0m[34mcat file1
+[0mAlan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. During World War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. SadlAlan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. During World War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. Sadly, Turing was persecuted for being gay and convicted of homosexuality in 1952. He died of apparent suicide two years later. It was only in 2009 that British Prime Minister Gordon Brown issued a public apology on behalf of the British government for the way Turing was treated.y, Turing was persecuted for being gay and convicted of homosexuality in 1952. He died of apparent suicide two years later. It was only in 2009 that British Prime Minister Gordon Brown issued a public apology on behalf of the British government for the way Turing was treated.
+[34mls
+[0m[34mcd ..
+[0m[34mls
+[0m[34mrmdir dir
 [0m[34mls
 [0m[34me
-[0mReturnBlock: Return the blocks
-ReturnBlock: Return the blocks successfully
-Goodbye
+[0mGoodbye

@@ -3,12 +3,146 @@ disk size: 4194304
 Format: Start to format the disk
 InitBlock: Init the blocks
 InitBlock: Init the blocks successfully
+allocate a inode block: 0
+WriteDisk: 1 0 256 0
 Format: Finish formatting the disk
+ReadDisk: 0 0 256 0
+ReadBlock: /
 [34mls
-[0m.	0	D	2023-5-13 17:1:11	
-..	0	D	2023-5-13 17:1:11	
+[0mReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+.	0	D	2023-5-23 22:51:36	
+..	0	D	2023-5-23 22:51:36	
 [32mYES[0m
-[34me
-[0mReturnBlock: Return the blocks
-ReturnBlock: Return the blocks successfully
-Goodbye
+[34mmkdir dir
+[0mReadDisk: 0 0 256 0
+ReadBlock: /
+allocate a inode block: 1
+ReadDisk: 0 0 256 0
+ReadBlock: /
+WriteDisk: 1 1 256 0
+WriteDisk: 1 0 256 0
+[32mYES[0m
+[34mcd dir
+[0mReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+[32mYES[0m
+[34mmkdir tmp
+[0mReadDisk: 0 1 256 0
+ReadBlock: dir
+allocate a inode block: 2
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+WriteDisk: 1 2 256 0
+WriteDisk: 1 1 256 0
+[32mYES[0m
+[34mcd tmp
+[0mReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 2 256 0
+ReadBlock: tmp
+ReadDisk: 0 2 256 0
+ReadBlock: tmp
+ReadDisk: 0 2 256 0
+ReadBlock: tmp
+ReadDisk: 0 2 256 0
+ReadBlock: tmp
+[32mYES[0m
+[34mcd /dir
+[0mReadDisk: 0 2 256 0
+ReadBlock: tmp
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+[32mYES[0m
+[34mmk file1
+[0mReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 2 256 0
+ReadBlock: tmp
+allocate a inode block: 3
+WriteDisk: 1 3 256 0
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+WriteDisk: 1 1 256 0
+[32mYES[0m
+[34mls
+[0mReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 2 256 0
+ReadBlock: tmp
+ReadDisk: 0 3 256 0
+ReadBlock: file1
+.	0	D	2023-5-23 22:51:45	
+..	0	D	2023-5-23 22:51:36	
+tmp	0	D	2023-5-23 22:51:52	
+file1	0	F	2023-5-23 22:51:59	
+[32mYES[0m
+[34mw file1 1000 Alan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. During World War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. [0mReadDisk: 0 1 256 0
+ReadBlock: dir
+ReadDisk: 0 2 256 0
+ReadBlock: tmp
+ReadDisk: 0 3 256 0
+ReadBlock: file1
+ReadDisk: 0 3 256 0
+ReadBlock: file1
+allocate a data block: 4096
+WriteDisk: 1 4096 242 0
+WriteDisk: 1 3 256 0
+[32mYES[0m
+[34mIn 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. S[0mFAIL: No such command!
+[34madly, Turing was persecuted for being gay and convicted of homosexuality in 1952. He died of apparent suicide two years later. It was only in 2009 that British Prime Minister Gordon Brown issued a public apology on behalf of the British government for the[0mFAIL: No such command!
+[34m way Turing was treated.
+[0mFAIL: No such command!
+[34mls
+[0mReadDisk: 0 1 256 0
+ReadBlock: 
+[34mmk file1
+[0mReadDisk: 0 0 256 0
+[34mf
+[0mFormat: Start to format the disk
+InitBlock: Init the blocks
+InitBlock: Init the blocks successfully
+allocate a inode block: 0
+WriteDisk: 1 0 256 0
+[34mls
+[0mReadDisk: 0 0 256 0
+[34mf
+[0mFormat: Start to format the disk
+InitBlock: Init the blocks
+InitBlock: Init the blocks successfully
+allocate a inode block: 0
+WriteDisk: 1 0 256 0

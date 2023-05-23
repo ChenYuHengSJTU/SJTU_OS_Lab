@@ -1,0 +1,8 @@
+[35mI
+[0m	Cylinder: 10	Sector: 5
+[34mW 0 0 hellojieli
+[0m	Write to disk c 0 s 0 write offset: 0
+[32mR 0 0 
+[0m	Read from disk c 0 s 0 read offset: 0
+[31mE
+[0mGoodbye

@@ -30,7 +30,8 @@
 #define BLOCK_SIZE 256 
 #define DIRECT_BLOCK 8
 #define SECOND_INDIRECT_BLOCK 4 * 32
-#define CMD_MAX_LEN 256
+#define MAX_ENTRY_NUM 8 + 4 * 32
+#define CMD_MAX_LEN 1024
 #define ENTRY_NUM 32
 // this can be calculated from the max amount of the disk
 #define MAX_DIR_DEPTH 128
@@ -793,6 +794,64 @@ int PrintCurDir(char **args){
     PrintEntry(&inode);
 }
 
+void ListAux(struct Inode dir){
+    struct Inode dir_to_print[MAX_ENTRY_NUM], file_to_print[MAX_ENTRY_NUM];
+    int dir_cnt = 0, file_cnt = 0;
+    struct Inode tmp;
+    for(int i = 2;i < DIRECT;++i){
+        if(dir.direct[i] == -1)
+            continue;
+        // sprintf(output+strlen(output), "%d\n%ld\t%ld\n", i, dir.direct[i], (INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE);
+        assert((INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE <= DISK_SIZE);
+        // memcpy(&tmp, disk + (INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE, sizeof(tmp));
+        ReadBlock(dir.direct[i] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
+        // PrintEntry(&tmp);
+    }
+    for(int i = 0;i < SECOND_INDIRECT_BLOCK;++i){
+        if(dir.second_indirect[i / ENTRY_NUM] == -1)
+            continue;
+        // sprintf(output+strlen(output), "%d\n", i);
+        assert((INODE_BLOCK + dir.second_indirect[i / ENTRY_NUM]) * BLOCK_SIZE < DISK_SIZE);
+        // uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + dir.second_indirect[i / ENTRY_NUM] * BLOCK_SIZE));
+        uint64_t second_block[ENTRY_NUM];
+        ReadBlock(dir.second_indirect[i / ENTRY_NUM] + INODE_BLOCK, (char*)second_block, sizeof(second_block), 0, 0);
+        if(second_block[i % ENTRY_NUM] == -1)
+            continue;
+        // memcpy(&tmp, disk + (second_block[i % ENTRY_NUM] + INODE_BLOCK) * BLOCK_SIZE, sizeof(tmp));
+        ReadBlock(second_block[i % ENTRY_NUM] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
+        // PrintEntry(&tmp);
+    }
+
+    // in lexicography order
+    for(int i = 0;i < dir_cnt;++i){
+        for(int j = i + 1;j < dir_cnt;++j){
+            if(strcmp(dir_to_print[i].filename, dir_to_print[j].filename) > 0){
+                struct Inode tmp = dir_to_print[i];
+                dir_to_print[i] = dir_to_print[j];
+                dir_to_print[j] = tmp;
+            }
+        }
+    }
+
+    for(int i = 0;i < file_cnt;++i){
+        for(int j = i + 1;j < file_cnt;++j){
+            if(strcmp(file_to_print[i].filename, file_to_print[j].filename) > 0){
+                struct Inode tmp = file_to_print[i];
+                file_to_print[i] = file_to_print[j];
+                file_to_print[j] = tmp;
+            }
+        }
+    }
+
+    for(int i = 0;i < file_cnt;++i){
+        PrintEntry(&file_to_print[i]);
+    }
+
+    for(int i = 0;i < dir_cnt;++i){
+        PrintEntry(&dir_to_print[i]);
+    }
+}
+
 // ls
 // for dir inode , we cannot use the block_num, we must use -1 to manage the invalid inode entry
 int List(char **args){
@@ -826,29 +885,30 @@ int List(char **args){
     sprintf(output+strlen(output), "%s\t", tmp.Time);
     sprintf(output+strlen(output), "\n");
 
-    for(int i = 2;i < DIRECT;++i){
-        if(dir.direct[i] == -1)
-            continue;
-        // sprintf(output+strlen(output), "%d\n%ld\t%ld\n", i, dir.direct[i], (INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE);
-        assert((INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE <= DISK_SIZE);
-        // memcpy(&tmp, disk + (INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE, sizeof(tmp));
-        ReadBlock(dir.direct[i] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
-        PrintEntry(&tmp);
-    }
-    for(int i = 0;i < SECOND_INDIRECT_BLOCK;++i){
-        if(dir.second_indirect[i / ENTRY_NUM] == -1)
-            continue;
-        // sprintf(output+strlen(output), "%d\n", i);
-        assert((INODE_BLOCK + dir.second_indirect[i / ENTRY_NUM]) * BLOCK_SIZE < DISK_SIZE);
-        // uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + dir.second_indirect[i / ENTRY_NUM] * BLOCK_SIZE));
-        uint64_t second_block[ENTRY_NUM];
-        ReadBlock(dir.second_indirect[i / ENTRY_NUM] + INODE_BLOCK, (char*)second_block, sizeof(second_block), 0, 0);
-        if(second_block[i % ENTRY_NUM] == -1)
-            continue;
-        // memcpy(&tmp, disk + (second_block[i % ENTRY_NUM] + INODE_BLOCK) * BLOCK_SIZE, sizeof(tmp));
-        ReadBlock(second_block[i % ENTRY_NUM] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
-        PrintEntry(&tmp);
-    }
+    // for(int i = 2;i < DIRECT;++i){
+    //     if(dir.direct[i] == -1)
+    //         continue;
+    //     // sprintf(output+strlen(output), "%d\n%ld\t%ld\n", i, dir.direct[i], (INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE);
+    //     assert((INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE <= DISK_SIZE);
+    //     // memcpy(&tmp, disk + (INODE_BLOCK + dir.direct[i]) * BLOCK_SIZE, sizeof(tmp));
+    //     ReadBlock(dir.direct[i] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
+    //     PrintEntry(&tmp);
+    // }
+    // for(int i = 0;i < SECOND_INDIRECT_BLOCK;++i){
+    //     if(dir.second_indirect[i / ENTRY_NUM] == -1)
+    //         continue;
+    //     // sprintf(output+strlen(output), "%d\n", i);
+    //     assert((INODE_BLOCK + dir.second_indirect[i / ENTRY_NUM]) * BLOCK_SIZE < DISK_SIZE);
+    //     // uint64_t* second_block = (uint64_t*)(disk + (INODE_BLOCK + dir.second_indirect[i / ENTRY_NUM] * BLOCK_SIZE));
+    //     uint64_t second_block[ENTRY_NUM];
+    //     ReadBlock(dir.second_indirect[i / ENTRY_NUM] + INODE_BLOCK, (char*)second_block, sizeof(second_block), 0, 0);
+    //     if(second_block[i % ENTRY_NUM] == -1)
+    //         continue;
+    //     // memcpy(&tmp, disk + (second_block[i % ENTRY_NUM] + INODE_BLOCK) * BLOCK_SIZE, sizeof(tmp));
+    //     ReadBlock(second_block[i % ENTRY_NUM] + INODE_BLOCK, (char*)&tmp, sizeof(tmp), 0, 0);
+    //     PrintEntry(&tmp);
+    // }
+    ListAux(dir);
     return 0;
 }
 
@@ -1004,11 +1064,11 @@ int Insert(char **args){
     // memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, data_before_blk_num) * BLOCK_SIZE), pos % BLOCK_SIZE);
     ReadBlock(*GetPhysicalBlockNum(&file, data_before_blk_num), content + offset, pos % BLOCK_SIZE, 0, 0);
     // sprintf(output+strlen(output), "%s\n", content);
-    printf("offset: %d\tcontent1: %s\n", offset, content);
+    // printf("offset: %d\tcontent1: %s\n", offset, content);
     offset += pos % BLOCK_SIZE;
     // sprintf(output+strlen(output), "%d\n", offset);
     memcpy(content + offset, args[4], len);
-    printf("offset: %d\tcontent2: %s\n", offset, content);
+    // printf("offset: %d\tcontent2: %s\n", offset, content);
     offset += len;
     // sprintf(output+strlen(output), "%d\n", offset);
     // sprintf(output+strlen(output), "%s\n", content);
@@ -1019,7 +1079,7 @@ int Insert(char **args){
         // memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, data_before_blk_num)) * BLOCK_SIZE + pos, copy_sz);
         ReadBlock(*GetPhysicalBlockNum(&file, data_before_blk_num), content + offset, copy_sz, pos % BLOCK_SIZE, 0);
     // sprintf(output+strlen(output), "%s\n", content);  
-    printf("offset: %d\tcontent3: %s\n", offset, content);
+    // printf("offset: %d\tcontent3: %s\n", offset, content);
     offset += BLOCK_SIZE - pos % BLOCK_SIZE;
     for(int i = data_before_blk_num + 1;i < file.block_num;++i){
         // memcpy(content + offset, disk + (*GetPhysicalBlockNum(file, i)) * BLOCK_SIZE, BLOCK_SIZE);
@@ -1032,9 +1092,9 @@ int Insert(char **args){
     FreeFile(&file);
     WriteAux(&file, content, tmp_sz + len);
     // sprintf(output+strlen(output), "write to block %ld\n", file->direct[0]);
-    printf("content: %s\n", content);
-    printf("file size: %d\n", file.file_size);
-    printf("content: %s\n", content + strlen(content));
+    // printf("content: %s\n", content);
+    // printf("file size: %d\n", file.file_size);
+    // printf("content: %s\n", content + strlen(content));
     free(content);
     WriteBlock(*inode_block + INODE_BLOCK, (char*)&file, sizeof(file), 0, 0);
 }

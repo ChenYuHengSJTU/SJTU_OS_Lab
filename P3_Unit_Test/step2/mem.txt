@@ -1,0 +1,87 @@
+==288110== Memcheck, a memory error detector
+==288110== Copyright (C) 2002-2017, and GNU GPL'd, by Julian Seward et al.
+==288110== Using Valgrind-3.18.1 and LibVEX; rerun with -h for copyright info
+==288110== Command: ./fs
+==288110== 
+Welcome to the file system!
+disk size: 2560000
+[32mFormat Done![0m
+[34m/[0m [32m$[0m .	0	D	2023-5-23 22:15:3	
+..	0	D	2023-5-23 22:15:3	
+[32mYES[0m
+[34m/[0m [32m$[0m [32mYES[0m
+[34m/[0m [32m$[0m .	0	D	2023-5-23 22:15:3	
+..	0	D	2023-5-23 22:15:3	
+file1	0	F	2023-5-23 22:15:3	
+[32mYES[0m
+[34m/[0m [32m$[0m [32mYES[0m
+[34m/[0m [32m$[0m .	0	D	2023-5-23 22:15:3	
+..	0	D	2023-5-23 22:15:3	
+file1	256	F	2023-5-23 22:15:3	
+[32mYES[0m
+[34m/[0m [32m$[0m Alan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. During World War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he pr
+[32mYES[0m
+[34m/[0m [32m$[0m [32mYES[0m
+[34m/[0m [32m$[0m Alan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. During World War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. Sadly, Turing was persecuted for being gay and convicted of homosexuality in 1952. He died of apparent suicide two years later. It was only in 2009 that British Prime Minister Gordon Brown issued a public apology on behalf of the British government for the way Turing was treated.
+[32mYES[0m
+[34m/[0m [32m$[0m .	0	D	2023-5-23 22:15:3	
+..	0	D	2023-5-23 22:15:3	
+file1	776	F	2023-5-23 22:15:3	
+[32mYES[0m
+[34m/[0m [32m$[0m [32mYES[0m
+[34m/[0m [32m$[0m [32mYES[0m
+[34mdir[0m [32m$[0m .	0	D	2023-5-23 22:15:3	
+..	0	D	2023-5-23 22:15:3	
+[32mYES[0m
+[34mdir[0m [32m$[0m [32mYES[0m
+[34mdir[0m [32m$[0m [32mYES[0m
+[34mdir[0m [32m$[0m .	0	D	2023-5-23 22:15:3	
+..	0	D	2023-5-23 22:15:3	
+[32mYES[0m
+[34mdir[0m [32m$[0m [32mYES[0m
+[34mdir[0m [32m$[0m [32mYES[0m
+[34mdir[0m [32m$[0m [32mYES[0m
+[34mdir[0m [32m$[0m .	0	D	2023-5-23 22:15:3	
+..	0	D	2023-5-23 22:15:3	
+file1	500	F	2023-5-23 22:15:3	
+[32mYES[0m
+[34mdir[0m [32m$[0m Alan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. During World War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. Sadl
+[32mYES[0m
+[34mdir[0m [32m$[0m [32mYES[0m
+[34mdir[0m [32m$[0m .	0	D	2023-5-23 22:15:3	
+..	0	D	2023-5-23 22:15:3	
+file1	1302	F	2023-5-23 22:15:3	
+[32mYES[0m
+[34mdir[0m [32m$[0m Alan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. During World War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. SadlAlan Turing was a British mathematician and computer scientist who played a vital role in the development of theoretical computer science, artificial intelligence, and codebreaking during World War II. He is widely regarded as one of the most influential figures in the history of computing. Turing's concept of the universal machine laid the foundation for the development of modern computers and his work on the Enigma code helped crack German military codes, thus speeding up the end of the war. However, his life was cut short when he was persecuted for his homosexuality, which was illegal in the UK at that time. It wasn't until decades after his death that the UK government formally apologized and granted him a posthumous pardon. Turing's legacy continues to inspire and shape our world today.
+[32mYES[0m
+[34mdir[0m [32m$[0m [32mYES[0m
+[34mdir[0m [32m$[0m .	0	D	2023-5-23 22:15:3	
+..	0	D	2023-5-23 22:15:3	
+file1	1172	F	2023-5-23 22:15:3	
+[32mYES[0m
+[34mdir[0m [32m$[0m  War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. SadlAlan Turing was a British mathematician and computer scientist who played a vital role in the development of theoretical computer science, artificial intelligence, and codebreaking during World War II. He is widely regarded as one of the most influential figures in the history of computing. Turing's concept of the universal machine laid the foundation for the development of modern computers and his work on the Enigma code helped crack German military codes, thus speeding up the end of the war. However, his life was cut short when he was persecuted for his homosexuality, which was illegal in the UK at that time. It wasn't until decades after his death that the UK government formally apologized and granted him a posthumous pardon. Turing's legacy continues to inspire and shape our world today.
+[32mYES[0m
+[34mdir[0m [32m$[0m [32mYES[0m
+[34mdir[0m [32m$[0m .	0	D	2023-5-23 22:15:3	
+..	0	D	2023-5-23 22:15:3	
+file1	1482	F	2023-5-23 22:15:3	
+[32mYES[0m
+[34mdir[0m [32m$[0m Alan Turing was a pioneering figure in the field of computer science. He is best known for his concept of the universal machine, which was a theoretical machine capable of performing any computation that could be executed by a human being. This idea laid the groundwork for the development of modern computers. War II, he played a crucial role in cracking German encryption codes, which helped to bring an end to the war. In 1950, he proposed what is now known as the Turing Test, which tests a machine's ability to exhibit intelligent behavior equivalent to, or indistinguishable from, that of a human. This work laid the foundation for the field of artificial intelligence. SadlAlan Turing was a British mathematician and computer scientist who played a vital role in the development of theoretical computer science, artificial intelligence, and codebreaking during World War II. He is widely regarded as one of the most influential figures in the history of computing. Turing's concept of the universal machine laid the foundation for the development of modern computers and his work on the Enigma code helped crack German military codes, thus speeding up the end of the war. However, his life was cut short when he was persecuted for his homosexuality, which was illegal in the UK at that time. It wasn't until decades after his death that the UK government formally apologized and granted him a posthumous pardon. Turing's legacy continues to inspire and shape our world today.
+[32mYES[0m
+[34mdir[0m [32m$[0m [32mYES[0m
+[34mdir[0m [32m$[0m .	0	D	2023-5-23 22:15:3	
+..	0	D	2023-5-23 22:15:3	
+file1	182	F	2023-5-23 22:15:3	
+[32mYES[0m
+[34mdir[0m [32m$[0m t wasn't until decades after his death that the UK government formally apologized and granted him a posthumous pardon. Turing's legacy continues to inspire and shape our world today.
+[32mYES[0m
+[34mdir[0m [32m$[0m Goodbye
+==288110== 
+==288110== HEAP SUMMARY:
+==288110==     in use at exit: 0 bytes in 0 blocks
+==288110==   total heap usage: 2,602 allocs, 2,602 frees, 2,906,747 bytes allocated
+==288110== 
+==288110== All heap blocks were freed -- no leaks are possible
+==288110== 
+==288110== For lists of detected and suppressed errors, rerun with: -s
+==288110== ERROR SUMMARY: 0 errors from 0 contexts (suppressed: 0 from 0)

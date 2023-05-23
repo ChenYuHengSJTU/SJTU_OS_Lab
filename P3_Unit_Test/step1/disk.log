@@ -1,2 +1,17 @@
-[31mE
+[35mI
+[0m	Cylinder: 10	Sector: 5
+[34mW 0 0 Alan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. 
+[0m	Write to disk c 0 s 0 write offset: 0
+[32mR 0 0
+[0m	Read from disk c 0 s 0 read offset: 0
+[34mW 1 2 Alan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. 
+[0m	Write to disk c 1 s 2 write offset: 1792
+[32mR 1 2
+[0m	Read from disk c 1 s 2 read offset: 1792
+[32mR 5 5
+[0m	Read from disk c 5 s 5 [34mW 0 6
+[0m	Write to disk c 0 s 6 Error: wrong W command used...
+W c s data
+[34mW 0 6 Alan Turing was a British mathematician and logician who is widely regarded as the father of modern computer science. 
+[0m	Write to disk c 0 s 6 [31mE
 [0mGoodbye

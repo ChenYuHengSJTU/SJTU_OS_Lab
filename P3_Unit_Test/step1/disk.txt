@@ -1,0 +1,32 @@
+Script started on 2023-05-23 08:43:13+08:00 [TERM="xterm-256color" TTY="/dev/pts/1" COLUMNS="50" LINES="21"]
+./  make cela   lean
+make
+d ./disk
+exit
+[1m[7m%[27m[1m[0m                                                  ]2;cyh627@cyh627-Ubuntu22:~/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1]1;..it_Test/step1]7;file://cyh627-Ubuntu22/home/cyh627/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1[0m[27m[24m[J(base) [39m[0m[49m[40m[39m cyh627@cyh627-Ubuntu22 [44m[30m[30m ~/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1 [43m[34m[30m  main ±✚ [49m[33m[39m [K[?1h=[?2004hmmake clean[?1l>[?2004l
+]2;make clean]1;makerm -rf disk
+[1m[7m%[27m[1m[0m                                                  ]2;cyh627@cyh627-Ubuntu22:~/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1]1;..it_Test/step1]7;file://cyh627-Ubuntu22/home/cyh627/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1[0m[27m[24m[J(base) [39m[0m[49m[40m[39m cyh627@cyh627-Ubuntu22 [44m[30m[30m ~/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1 [43m[34m[30m  main ±✚ [49m[33m[39m [K[?1h=[?2004hmmake[?1l>[?2004l
+]2;make]1;makegcc -O2 -g disk.c -o disk
+[01m[Kdisk.c:[m[K In function ‘[01m[KWriteDisk[m[K’:
+[01m[Kdisk.c:121:31:[m[K [01;35m[Kwarning: [m[Kformat ‘[01m[K%d[m[K’ expects argument of type ‘[01m[Kint[m[K’, but argument 2 has type ‘[01m[Ksize_t[m[K’ {aka ‘[01m[Klong unsigned int[m[K’} [[01;35m[K]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wformat=-Wformat=]8;;[m[K]
+  121 |         printf("Write error: [01;35m[K%d[m[K bytes to write but only write %d bytes\n", [32m[Kstrlen(Data)[m[K, n);
+      |                              [01;35m[K~^[m[K                                            [32m[K~~~~~~~~~~~~[m[K
+      |                               [01;35m[K|[m[K                                            [32m[K|[m[K
+      |                               [01;35m[Kint[m[K                                          [32m[Ksize_t {aka long unsigned int}[m[K
+      |                              [32m[K%ld[m[K
+[01m[Kdisk.c:[m[K In function ‘[01m[Kmain[m[K’:
+[01m[Kdisk.c:271:25:[m[K [01;35m[Kwarning: [m[Kformat ‘[01m[K%d[m[K’ expects argument of type ‘[01m[Kint[m[K’, but argument 2 has type ‘[01m[Ksize_t[m[K’ {aka ‘[01m[Klong unsigned int[m[K’} [[01;35m[K]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wformat=-Wformat=]8;;[m[K]
+  271 |     printf("initialize [01;35m[K%d[m[K bytes successfully\n", [32m[Kfwrite(disk, 1 , DISKSIZE, fp)[m[K);
+      |                        [01;35m[K~^[m[K                        [32m[K~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[m[K
+      |                         [01;35m[K|[m[K                        [32m[K|[m[K
+      |                         [01;35m[Kint[m[K                      [32m[Ksize_t {aka long unsigned int}[m[K
+      |                        [32m[K%ld[m[K
+[01m[Kdisk.c:[m[K In function ‘[01m[KDisk_Working[m[K’:
+[01m[Kdisk.c:159:9:[m[K [01;35m[Kwarning: [m[Kignoring return value of ‘[01m[Kfgets[m[K’ declared with attribute ‘[01m[Kwarn_unused_result[m[K’ [[01;35m[K]8;;https://gcc.gnu.org/onlinedocs/gcc/Warning-Options.html#index-Wunused-result-Wunused-result]8;;[m[K]
+  159 |         [01;35m[Kfgets(cmd_line, DISKSIZE, stdin)[m[K;
+      |         [01;35m[K^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~[m[K
+[1m[7m%[27m[1m[0m                                                  ]2;cyh627@cyh627-Ubuntu22:~/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1]1;..it_Test/step1]7;file://cyh627-Ubuntu22/home/cyh627/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1[0m[27m[24m[J(base) [39m[0m[49m[40m[39m cyh627@cyh627-Ubuntu22 [44m[30m[30m ~/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1 [43m[34m[30m  main ±✚ [49m[33m[39m [K[?1h=[?2004h../disk[?1l>[?2004l
+]2;./disk]1;./diskUsage: ./disk <track to track delay> <number of cylinders> <number of sectors per cylinder> <disk file>
+[1m[7m%[27m[1m[0m                                                  ]2;cyh627@cyh627-Ubuntu22:~/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1]1;..it_Test/step1]7;file://cyh627-Ubuntu22/home/cyh627/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1[0m[27m[24m[J(base) [39m[0m[49m[40m[39m [31m✘[40m[39m cyh627@cyh627-Ubuntu22 [44m[30m[30m ~/SJTU/Sophomore_2/OS/Course_Design/SJTU_OS_Lab/P3_Unit_Test/step1 [43m[34m[30m  main ±✚ [49m[33m[39m [K[?1h=[?2004heexit[?1l>[?2004l
+]2;exit]1;exit
+Script done on 2023-05-23 08:43:34+08:00 [COMMAND_EXIT_CODE="1"]

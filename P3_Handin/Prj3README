@@ -1,0 +1,22 @@
+Prj3:
+	step1:
+		disk.c: source file
+		disk.log: disk working log
+		disk.img: disk simulation file
+		Makefile
+	step2:
+		fs.c: source file
+		fs.log: file system working log
+		Makefile
+	step3:
+		disk.c: source file
+		fs.c: source file
+		client.c: client source file
+		disk.log: disk server working log
+		disk.img: disk server simulation file
+		fs.log: file system server working log
+		Makefile
+	Prj3README: current file
+	report.pdf
+	pre.slides.html: for report next Tuesday
+

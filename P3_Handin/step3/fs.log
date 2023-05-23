@@ -1,0 +1,165 @@
+Welcome to the file system!
+disk size: 4194304
+Format: Start to format the disk
+InitBlock: Init the blocks
+InitBlock: Init the blocks successfully
+allocate a inode block: 0
+WriteDisk: 1 0 256 0
+Format: Finish formatting the disk
+ReadDisk: 0 0 256 0
+ReadBlock: /
+[34mf
+[0mFormat: Start to format the disk
+InitBlock: Init the blocks
+InitBlock: Init the blocks successfully
+allocate a inode block: 0
+WriteDisk: 1 0 256 0
+Format: Finish formatting the disk
+ReadDisk: 0 0 256 0
+ReadBlock: /
+[32mYES[0m
+[34mmk file1
+[0mReadDisk: 0 0 256 0
+ReadBlock: /
+allocate a inode block: 1
+WriteDisk: 1 1 256 0
+ReadDisk: 0 0 256 0
+ReadBlock: /
+WriteDisk: 1 0 256 0
+[32mYES[0m
+[34mw file1 256 Alan Turing was an English mathematician, logician, and computer scientist who is widely regarded as the father of theoretical computer science and artificial intelligence.
+[0mReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 1 256 0
+ReadBlock: file1
+ReadDisk: 0 1 256 0
+ReadBlock: file1
+allocate a data block: 4096
+WriteDisk: 1 4096 172 0
+WriteDisk: 1 1 256 0
+[32mYES[0m
+[34mls
+[0mReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 1 256 0
+ReadBlock: file1
+.	0	D	2023-5-16 19:53:22	
+..	0	D	2023-5-16 19:53:22	
+file1	172	F	2023-5-16 19:53:27	
+[32mYES[0m
+[34mmkdir dir1
+[0mReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 1 256 0
+ReadBlock: file1
+allocate a inode block: 2
+ReadDisk: 0 0 256 0
+ReadBlock: /
+WriteDisk: 1 2 256 0
+WriteDisk: 1 0 256 0
+[32mYES[0m
+[34mls
+[0mReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 1 256 0
+ReadBlock: file1
+ReadDisk: 0 2 256 0
+ReadBlock: dir1
+.	0	D	2023-5-16 19:53:22	
+..	0	D	2023-5-16 19:53:22	
+file1	172	F	2023-5-16 19:53:27	
+dir1	0	D	2023-5-16 19:53:40	
+[32mYES[0m
+[34me
+[0mReturnBlock: Return the blocks
+ReturnBlock: Return the blocks successfully
+Goodbye
+[34mls
+[0mReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 1 256 0
+ReadBlock: file1
+ReadDisk: 0 2 256 0
+ReadBlock: dir1
+.	0	D	2023-5-16 19:53:22	
+..	0	D	2023-5-16 19:53:22	
+file1	172	F	2023-5-16 19:53:27	
+dir1	0	D	2023-5-16 19:53:40	
+[32mYES[0m
+[34mcd dir1
+[0mReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 1 256 0
+ReadBlock: file1
+ReadDisk: 0 2 256 0
+ReadBlock: dir1
+ReadDisk: 0 2 256 0
+ReadBlock: dir1
+ReadDisk: 0 2 256 0
+ReadBlock: dir1
+ReadDisk: 0 2 256 0
+ReadBlock: dir1
+[32mYES[0m
+[34mls
+[0mReadDisk: 0 2 256 0
+ReadBlock: dir1
+ReadDisk: 0 2 256 0
+ReadBlock: dir1
+ReadDisk: 0 0 256 0
+ReadBlock: /
+.	0	D	2023-5-16 19:53:40	
+..	0	D	2023-5-16 19:53:22	
+[32mYES[0m
+[34mmkdir dir1
+[0mReadDisk: 0 2 256 0
+ReadBlock: dir1
+allocate a inode block: 1
+ReadDisk: 0 2 256 0
+ReadBlock: dir1
+WriteDisk: 1 1 256 0
+WriteDisk: 1 2 256 0
+[32mYES[0m
+[34mcd dir1
+[0mReadDisk: 0 2 256 0
+ReadBlock: dir1
+ReadDisk: 0 2 256 0
+ReadBlock: dir1
+ReadDisk: 0 2 256 0
+ReadBlock: dir1
+ReadDisk: 0 1 256 0
+ReadBlock: dir1
+ReadDisk: 0 1 256 0
+ReadBlock: dir1
+ReadDisk: 0 1 256 0
+ReadBlock: dir1
+ReadDisk: 0 1 256 0
+ReadBlock: dir1
+[32mYES[0m
+[34mcd /
+[0mReadDisk: 0 1 256 0
+ReadBlock: dir1
+ReadDisk: 0 0 256 0
+ReadBlock: /
+ReadDisk: 0 0 256 0
+ReadBlock: /
+[32mYES[0m
+[34me
+[0mReturnBlock: Return the blocks
+ReturnBlock: Return the blocks successfully
+Goodbye

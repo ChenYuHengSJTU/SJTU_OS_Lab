@@ -2,6 +2,32 @@ mk file1
 ls
 w file1 10 hellojieli
 ls
+cat file1
+d file1 5 5 
+cat file1
+i file1 0 10 jieliafool
+ls
+cat file1
+mkdir tmp
+ls
+mkdir dir1
+ls
+cd dir1
+mk file1
+ls
+w file1 10 hellojieli
+ls
+cat file1
+d file1 5 5 
+ls
+cat file1
+i file1 0 10 jieliafool
+ls
+cat file1
 rm file1
+ls
+cd ..
+rm tmp
+rmdir tmp
 ls
 e
